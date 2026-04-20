@@ -10,7 +10,7 @@ const symbols = [
   { emoji: '💎', weight: 3, multiplier: 8 }
 ];
 
-// 🧠 weighted spin
+// 🧠 safe weighted spin
 function spin() {
   const total = symbols.reduce((sum, s) => sum + s.weight, 0);
   let rand = Math.random() * total;
@@ -19,6 +19,8 @@ function spin() {
     if (rand < s.weight) return s;
     rand -= s.weight;
   }
+
+  return symbols[0]; // safety fallback
 }
 
 export const data = new SlashCommandBuilder()
@@ -31,79 +33,91 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  const id = interaction.user.id;
-  const amount = interaction.options.getInteger('amount');
+  try {
+    const id = interaction.user.id;
+    const amount = interaction.options.getInteger('amount');
 
-  const user = getUser(id);
+    const user = getUser(id);
 
-  // 🛡️ FIX: prevent broken/missing balance
-  if (typeof user.balance !== 'number') {
-    user.balance = 1000;
-  }
+    // 🛡️ safety defaults
+    if (!user.balance || typeof user.balance !== 'number') {
+      user.balance = 1000;
+    }
 
-  // ❌ invalid bet
-  if (amount <= 0 || amount > user.balance) {
-    return interaction.reply('❌ Invalid bet amount.');
-  }
+    // ❌ invalid bet
+    if (amount <= 0 || amount > user.balance) {
+      return interaction.reply({
+        content: '❌ Invalid bet amount.',
+        ephemeral: true
+      });
+    }
 
-  // 💸 take bet safely
-  user.balance = Math.max(0, user.balance - amount);
+    // 💸 place bet
+    user.balance -= amount;
 
-  // 🎰 spin reels
-  const r1 = spin();
-  const r2 = spin();
-  const r3 = spin();
+    // 🎰 spin reels
+    const r1 = spin();
+    const r2 = spin();
+    const r3 = spin();
 
-  const roll = [r1.emoji, r2.emoji, r3.emoji];
+    const roll = [r1.emoji, r2.emoji, r3.emoji];
 
-  let multiplier = 0;
+    let multiplier = 0;
 
-  // 💎 jackpot
-  if (r1.emoji === r2.emoji && r2.emoji === r3.emoji) {
-    multiplier = r1.multiplier;
-  }
+    // 💎 jackpot
+    if (r1.emoji === r2.emoji && r2.emoji === r3.emoji) {
+      multiplier = r1.multiplier;
+    }
 
-  // ✨ 2 match
-  else if (
-    r1.emoji === r2.emoji ||
-    r2.emoji === r3.emoji ||
-    r1.emoji === r3.emoji
-  ) {
-    multiplier = 1.2;
-  }
+    // ✨ 2 match
+    else if (
+      r1.emoji === r2.emoji ||
+      r2.emoji === r3.emoji ||
+      r1.emoji === r3.emoji
+    ) {
+      multiplier = 1.2;
+    }
 
-  // 🌟 super rare event
-  const superEvent = Math.random() < 0.002;
-  if (superEvent) {
-    multiplier = multiplier > 0 ? multiplier * 10 : 10;
-  }
+    // 🌟 super rare event
+    const superEvent = Math.random() < 0.002;
+    if (superEvent) {
+      multiplier = multiplier > 0 ? multiplier * 10 : 10;
+    }
 
-  // 💰 winnings
-  const winAmount = multiplier > 0
-    ? Math.floor(amount * multiplier)
-    : 0;
+    // 💰 payout
+    const winAmount = multiplier > 0
+      ? Math.floor(amount * multiplier)
+      : 0;
 
-  user.balance += winAmount;
+    user.balance += winAmount;
 
-  // 🛡️ final safety clamp
-  if (!user.balance || isNaN(user.balance)) {
-    user.balance = 0;
-  }
+    // 🛡️ final safety clamp
+    if (user.balance < 0 || isNaN(user.balance)) {
+      user.balance = 0;
+    }
 
-  updateUser(id, user);
+    updateUser(id, user);
 
-  // 🎰 output
-  let msg =
+    let msg =
 `🎰 **SLOTS**
 \`${roll.join(' | ')}\`\n\n`;
 
-  if (superEvent) {
-    msg += `🌟 SUPER LUCKY EVENT!\n`;
+    if (superEvent) {
+      msg += `🌟 SUPER LUCKY EVENT!\n`;
+    }
+
+    msg += winAmount > 0
+      ? `🔥 You won $${winAmount}`
+      : `💀 You lost $${amount}`;
+
+    return interaction.reply(msg);
+
+  } catch (err) {
+    console.error("SLOTS ERROR:", err);
+
+    return interaction.reply({
+      content: '❌ Slot machine error. Try again.',
+      ephemeral: true
+    });
   }
-
-  msg += winAmount > 0
-    ? `🔥 You won $${winAmount}`
-    : `💀 You lost $${amount}`;
-
-  return interaction.reply(msg);
 }
