@@ -43,8 +43,8 @@ export async function execute(interaction) {
     } else {
       await interaction.reply({
         content: 'An error occurred while processing the command.',
-        ephemeral: true
-      });
+flags: 64    
+  });
     }
   }
 }

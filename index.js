@@ -1,7 +1,6 @@
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import dotenv from 'dotenv';
 import fs from 'fs';
-import * as blackjack from './commands/blackjack.js';
 
 dotenv.config();
 
@@ -20,7 +19,7 @@ for (const file of files) {
   const commandModule = await import(`./commands/${file}`);
   const command = commandModule.default ?? commandModule;
 
-  if (!command?.data || !command?.execute) {
+  if (!command?.data?.name || !command?.execute) {
     console.log(`❌ Invalid command file: ${file}`);
     continue;
   }
@@ -29,39 +28,55 @@ for (const file of files) {
 }
 
 // ===============================
-// READY
+// READY EVENT
 // ===============================
-client.once('ready', () => {
-  console.log(`🎰 Bot online as ${client.user.tag}`);
+client.once('clientReady', () => {
+  console.log(`🎰 Lucki is online as ${client.user.tag}`);
   console.log(`📊 Commands loaded: ${client.commands.size}`);
 });
 
 // ===============================
-// INTERACTIONS
+// INTERACTION HANDLER
 // ===============================
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🃏 BLACKJACK BUTTONS
+  // 🃏 BUTTON HANDLER (BLACKJACK FIXED)
   // ===============================
   if (interaction.isButton()) {
-    const valid = ['hit', 'stand', 'double', 'split'];
+    try {
 
-    if (valid.includes(interaction.customId)) {
-      try {
-        return await blackjack.handleBlackjackButtons(interaction);
-      } catch (err) {
-        console.error('Blackjack error:', err);
+      const blackjackModule = await import('./commands/blackjack.js');
 
-        if (!interaction.replied && !interaction.deferred) {
-          return interaction.reply({
-            content: '❌ Blackjack error occurred.',
-            ephemeral: true
-          });
-        }
+      const blackjack =
+        blackjackModule.default ??
+        blackjackModule;
+
+      const handler =
+        blackjackModule.handleBlackjackButtons ??
+        blackjack.handleBlackjackButtons;
+
+      if (typeof handler !== 'function') {
+        console.error('❌ Blackjack handler missing:', blackjackModule);
+
+        return interaction.reply({
+          content: '❌ Blackjack system error.',
+          flags: 64
+        });
+      }
+
+      return handler(interaction);
+
+    } catch (err) {
+      console.error('Blackjack button error:', err);
+
+      if (!interaction.replied && !interaction.deferred) {
+        return interaction.reply({
+          content: '❌ Error handling blackjack button.',
+          flags: 64
+        });
       }
     }
-    return;
   }
 
   // ===============================
@@ -69,34 +84,42 @@ client.on('interactionCreate', async interaction => {
   // ===============================
   if (!interaction.isChatInputCommand()) return;
 
+  console.log('➡️ Command:', interaction.commandName);
+
   const command = client.commands.get(interaction.commandName);
 
   if (!command) {
+    console.log('❌ Command not found:', interaction.commandName);
+
     return interaction.reply({
       content: '❌ Command not found.',
-      ephemeral: true
+      flags: 64
     });
   }
 
   try {
     await command.execute(interaction);
-    console.log(`✅ Executed ${interaction.commandName}`);
+    console.log('✅ Executed:', interaction.commandName);
 
   } catch (error) {
     console.error('❌ Command error:', error);
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: '❌ Error occurred.',
-        ephemeral: true
-      });
-    } else {
-      await interaction.reply({
-        content: '❌ Error occurred.',
-        ephemeral: true
-      });
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply('❌ An error occurred.');
+      } else {
+        await interaction.reply({
+          content: '❌ An error occurred.',
+          flags: 64
+        });
+      }
+    } catch (e) {
+      console.error('❌ Failed to send error message:', e);
     }
   }
 });
 
+// ===============================
+// LOGIN
+// ===============================
 client.login(process.env.DISCORD_TOKEN);

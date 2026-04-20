@@ -20,7 +20,7 @@ export async function execute(interaction) {
     console.error('Error in checkbalance:', error);
     await interaction.reply({
       content: 'An error occurred while processing the command.',
-      ephemeral: true
-    });
+flags: 64    
+});
   }
 }

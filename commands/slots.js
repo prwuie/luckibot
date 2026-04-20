@@ -44,8 +44,8 @@ export async function execute(interaction) {
     if (amount <= 0 || amount > user.balance) {
       return interaction.reply({
         content: '❌ Invalid bet amount.',
-        ephemeral: true
-      });
+flags: 64    
+  });
     }
 
     user.balance -= amount;
@@ -102,7 +102,6 @@ export async function execute(interaction) {
 
     return interaction.reply({
       content: '❌ Slot machine error. Try again.',
-      ephemeral: true
-    });
+flags: 64    });
   }
 }
