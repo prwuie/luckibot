@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getUser, updateUser, getUserDirect } from '../utils/db.js';
+import { getUser, updateUser } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
   .setName('steal')
@@ -86,7 +86,7 @@ export async function execute(interaction) {
   // -------------------------
   if (victim.bountyOn === thiefId) {
     const split = Math.floor(stolen / 2);
-    const bountyOwner = getUserDirect(victim.bountyOn);
+    const bountyOwner =getUser(victim.bountyOn);
 
     thief.balance += split;
     bountyOwner.balance += split;
