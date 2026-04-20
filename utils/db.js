@@ -2,10 +2,15 @@ import fs from 'fs';
 
 const DB_PATH = './data/economy.json';
 
-// -----------------------------
-// 📦 LOAD DB (SAFE)
-// -----------------------------
-function loadDB() {
+// =========================
+// 🧠 IN-MEMORY CACHE
+// =========================
+let db = {};
+
+// =========================
+// 📦 INIT DB ON START
+// =========================
+function initDB() {
   try {
     if (!fs.existsSync('./data')) {
       fs.mkdirSync('./data');
@@ -16,30 +21,38 @@ function loadDB() {
     }
 
     const raw = fs.readFileSync(DB_PATH, 'utf8');
-    return JSON.parse(raw || '{}');
+    db = JSON.parse(raw || '{}');
 
   } catch (err) {
-    console.error("DB LOAD ERROR:", err);
-    return {};
+    console.error("DB INIT ERROR:", err);
+    db = {};
   }
 }
 
-// -----------------------------
-// 💾 SAVE DB (SAFE)
-// -----------------------------
-function saveDB(db) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  } catch (err) {
-    console.error("DB SAVE ERROR:", err);
-  }
+// load once at startup
+initDB();
+
+// =========================
+// 💾 SAVE (THROTTLED SAFE WRITE)
+// =========================
+let saveTimeout;
+
+function saveDB() {
+  clearTimeout(saveTimeout);
+
+  saveTimeout = setTimeout(() => {
+    try {
+      fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+    } catch (err) {
+      console.error("DB SAVE ERROR:", err);
+    }
+  }, 300);
 }
 
-// -----------------------------
-// 👤 GET USER (SAFE + GUARANTEED STRUCTURE)
-// -----------------------------
+// =========================
+// 👤 GET USER (FAST + SAFE)
+// =========================
 export function getUser(id) {
-  const db = loadDB();
 
   if (!db[id]) {
     db[id] = {
@@ -57,20 +70,18 @@ export function getUser(id) {
     };
   }
 
-  // 🛡️ force safety (prevents undefined crashes)
+  // safety
   db[id].balance ??= 1000;
   db[id].inventory ??= [];
   db[id].debt ??= 0;
 
-  saveDB(db);
   return db[id];
 }
 
-// -----------------------------
+// =========================
 // ✏️ UPDATE USER (SAFE MERGE)
-// -----------------------------
+// =========================
 export function updateUser(id, user) {
-  const db = loadDB();
 
   db[id] = {
     balance: 1000,
@@ -87,12 +98,12 @@ export function updateUser(id, user) {
     ...user
   };
 
-  saveDB(db);
+  saveDB();
 }
 
-// -----------------------------
+// =========================
 // 📊 GET ALL USERS
-// -----------------------------
+// =========================
 export function getAllUsers() {
-  return loadDB();
+  return db;
 }
