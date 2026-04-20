@@ -11,27 +11,58 @@ const client = new Client({
 client.commands = new Collection();
 
 // ===============================
-// 📦 LOAD COMMANDS
+// 🧠 SAFE REPLY HELPER
+// ===============================
+async function safeReply(interaction, payload) {
+  try {
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.followUp(payload);
+    }
+    return await interaction.reply(payload);
+  } catch (err) {
+    console.error('safeReply error:', err);
+  }
+}
+
+// ===============================
+// 📦 COMMAND LOADER (FIXED)
 // ===============================
 const files = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 
 for (const file of files) {
-  const commandModule = await import(`./commands/${file}`);
-  const command = commandModule.default ?? commandModule;
+  try {
+    const commandModule = await import(`./commands/${file}`);
 
-  if (!command?.data?.name || !command?.execute) {
-    console.log(`❌ Invalid command file: ${file}`);
-    continue;
+    const command = commandModule.default ?? commandModule;
+
+    const data = command.data ?? command;
+
+    if (!data) {
+      console.log(`❌ Invalid command file: ${file}`);
+      continue;
+    }
+
+    const name = data.name ?? data.toJSON?.()?.name;
+
+    if (!name || !command.execute) {
+      console.log(`❌ Missing data/execute in: ${file}`);
+      continue;
+    }
+
+    client.commands.set(name, command);
+
+    console.log(`✅ Loaded command: ${name}`);
+
+  } catch (err) {
+    console.log(`❌ Failed loading ${file}:`, err);
   }
-
-  client.commands.set(command.data.name, command);
 }
 
 // ===============================
 // READY EVENT
 // ===============================
 client.once('clientReady', () => {
-  console.log(`🎰 Lucki is online as ${client.user.tag}`);
+  console.log(`🎰 Bot online as ${client.user.tag}`);
   console.log(`📊 Commands loaded: ${client.commands.size}`);
 });
 
@@ -41,7 +72,7 @@ client.once('clientReady', () => {
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🃏 BUTTON HANDLER (BLACKJACK FIXED)
+  // 🃏 BLACKJACK BUTTONS FIXED
   // ===============================
   if (interaction.isButton()) {
     try {
@@ -57,9 +88,9 @@ client.on('interactionCreate', async interaction => {
         blackjack.handleBlackjackButtons;
 
       if (typeof handler !== 'function') {
-        console.error('❌ Blackjack handler missing:', blackjackModule);
+        console.error('❌ Blackjack handler missing');
 
-        return interaction.reply({
+        return safeReply(interaction, {
           content: '❌ Blackjack system error.',
           flags: 64
         });
@@ -70,12 +101,10 @@ client.on('interactionCreate', async interaction => {
     } catch (err) {
       console.error('Blackjack button error:', err);
 
-      if (!interaction.replied && !interaction.deferred) {
-        return interaction.reply({
-          content: '❌ Error handling blackjack button.',
-          flags: 64
-        });
-      }
+      return safeReply(interaction, {
+        content: '❌ Error handling blackjack button.',
+        flags: 64
+      });
     }
   }
 
@@ -84,14 +113,10 @@ client.on('interactionCreate', async interaction => {
   // ===============================
   if (!interaction.isChatInputCommand()) return;
 
-  console.log('➡️ Command:', interaction.commandName);
-
   const command = client.commands.get(interaction.commandName);
 
   if (!command) {
-    console.log('❌ Command not found:', interaction.commandName);
-
-    return interaction.reply({
+    return safeReply(interaction, {
       content: '❌ Command not found.',
       flags: 64
     });
@@ -99,23 +124,14 @@ client.on('interactionCreate', async interaction => {
 
   try {
     await command.execute(interaction);
-    console.log('✅ Executed:', interaction.commandName);
 
   } catch (error) {
     console.error('❌ Command error:', error);
 
-    try {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply('❌ An error occurred.');
-      } else {
-        await interaction.reply({
-          content: '❌ An error occurred.',
-          flags: 64
-        });
-      }
-    } catch (e) {
-      console.error('❌ Failed to send error message:', e);
-    }
+    return safeReply(interaction, {
+      content: '❌ An error occurred.',
+      flags: 64
+    });
   }
 });
 
