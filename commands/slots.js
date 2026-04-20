@@ -10,6 +10,7 @@ const symbols = [
   { emoji: '💎', weight: 3, multiplier: 8 }
 ];
 
+// 🧠 weighted spin
 function spin() {
   const total = symbols.reduce((sum, s) => sum + s.weight, 0);
   let rand = Math.random() * total;
@@ -30,18 +31,25 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-
   const id = interaction.user.id;
-  const user = getUser(id);
-
   const amount = interaction.options.getInteger('amount');
 
+  const user = getUser(id);
+
+  // 🛡️ FIX: prevent broken/missing balance
+  if (typeof user.balance !== 'number') {
+    user.balance = 1000;
+  }
+
+  // ❌ invalid bet
   if (amount <= 0 || amount > user.balance) {
     return interaction.reply('❌ Invalid bet amount.');
   }
 
-  user.balance -= amount;
+  // 💸 take bet safely
+  user.balance = Math.max(0, user.balance - amount);
 
+  // 🎰 spin reels
   const r1 = spin();
   const r2 = spin();
   const r3 = spin();
@@ -64,26 +72,34 @@ export async function execute(interaction) {
     multiplier = 1.2;
   }
 
-  // 🌟 rare event
+  // 🌟 super rare event
   const superEvent = Math.random() < 0.002;
-
   if (superEvent) {
     multiplier = multiplier > 0 ? multiplier * 10 : 10;
   }
 
+  // 💰 winnings
   const winAmount = multiplier > 0
     ? Math.floor(amount * multiplier)
     : 0;
 
   user.balance += winAmount;
 
+  // 🛡️ final safety clamp
+  if (!user.balance || isNaN(user.balance)) {
+    user.balance = 0;
+  }
+
   updateUser(id, user);
 
+  // 🎰 output
   let msg =
 `🎰 **SLOTS**
 \`${roll.join(' | ')}\`\n\n`;
 
-  if (superEvent) msg += `🌟 SUPER LUCKY EVENT!\n`;
+  if (superEvent) {
+    msg += `🌟 SUPER LUCKY EVENT!\n`;
+  }
 
   msg += winAmount > 0
     ? `🔥 You won $${winAmount}`
