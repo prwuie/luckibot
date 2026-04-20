@@ -67,6 +67,7 @@ export const data = new SlashCommandBuilder()
 // START GAME
 // =======================
 export async function execute(interaction) {
+
   const id = interaction.user.id;
   const amount = interaction.options.getInteger('amount');
 
@@ -125,10 +126,13 @@ function buttons(canSplit) {
 }
 
 // =======================
-// RENDER
+// RENDER (SAFE)
 // =======================
 function render(id, reveal) {
+
   const g = games.get(id);
+
+  if (!g) return `❌ Game expired or not found.`;
 
   const handsText = g.hands.map((h, i) => {
     const prefix = i === g.activeHand ? '👉 ' : '';
@@ -152,6 +156,7 @@ ${handsText}
 // BUTTON HANDLER
 // =======================
 export async function handleBlackjackButtons(interaction) {
+
   try {
 
     const g = games.get(interaction.user.id);
@@ -164,24 +169,18 @@ export async function handleBlackjackButtons(interaction) {
     }
 
     const hand = g.hands[g.activeHand];
-    const getScore = () => score(hand);
 
-    // HIT
+    // ================= HIT =================
     if (interaction.customId === 'hit') {
 
       hand.push(draw());
 
-      if (getScore() > 21) {
+      if (score(hand) > 21) {
         g.activeHand++;
 
         if (g.activeHand >= g.hands.length) {
           return resolve(interaction);
         }
-
-        return interaction.update({
-          content: render(interaction.user.id, false),
-          components: buttons(g.canSplit)
-        });
       }
 
       return interaction.update({
@@ -190,7 +189,7 @@ export async function handleBlackjackButtons(interaction) {
       });
     }
 
-    // STAND
+    // ================= STAND =================
     if (interaction.customId === 'stand') {
 
       g.activeHand++;
@@ -205,7 +204,7 @@ export async function handleBlackjackButtons(interaction) {
       });
     }
 
-    // DOUBLE
+    // ================= DOUBLE =================
     if (interaction.customId === 'double') {
 
       let user = await getUser(interaction.user.id);
@@ -236,7 +235,7 @@ export async function handleBlackjackButtons(interaction) {
       });
     }
 
-    // SPLIT
+    // ================= SPLIT =================
     if (interaction.customId === 'split') {
 
       if (!g.canSplit || g.split) {
@@ -265,19 +264,18 @@ export async function handleBlackjackButtons(interaction) {
   } catch (err) {
     console.error('BLACKJACK BUTTON ERROR:', err);
 
-    if (!interaction.replied && !interaction.deferred) {
-      return interaction.reply({
-        content: '❌ Blackjack crashed.',
-        flags: 64
-      });
-    }
+    return interaction.reply({
+      content: '❌ Blackjack crashed.',
+      flags: 64
+    });
   }
 }
 
 // =======================
-// RESOLVE (FIXED CRASH VERSION)
+// RESOLVE (FIXED)
 // =======================
 async function resolve(interaction) {
+
   try {
 
     const g = games.get(interaction.user.id);
@@ -315,11 +313,13 @@ async function resolve(interaction) {
     user.balance += win;
     await updateUser(interaction.user.id, user);
 
+    const final = render(interaction.user.id, true);
+
     games.delete(interaction.user.id);
 
     return interaction.update({
       content:
-        render(interaction.user.id, true) +
+        final +
         `\n\n${win > g.amount ? '🎉 WIN' : win === g.amount ? '🤝 PUSH' : '💀 LOSS'}`,
       components: []
     });
@@ -327,11 +327,9 @@ async function resolve(interaction) {
   } catch (err) {
     console.error('RESOLVE ERROR:', err);
 
-    if (!interaction.replied && !interaction.deferred) {
-      return interaction.reply({
-        content: '❌ Game crashed.',
-        flags: 64
-      });
-    }
+    return interaction.reply({
+      content: '❌ Game crashed.',
+      flags: 64
+    });
   }
 }
