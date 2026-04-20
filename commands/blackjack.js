@@ -5,11 +5,7 @@ import {
   ButtonStyle
 } from 'discord.js';
 
-import {
-  getBalance,
-  addBalance,
-  removeBalance
-} from '../utils/economy.js';
+import { getUser, updateUser } from '../utils/db.js';
 
 // ----------------------
 // Cards
@@ -71,20 +67,23 @@ export const data = new SlashCommandBuilder()
 // Start game
 // ----------------------
 export async function execute(interaction) {
-  const amount = interaction.options.getInteger('amount');
+
   const id = interaction.user.id;
+  const user = getUser(id);
 
-  const bal = getBalance(id);
-  if (amount > bal) return interaction.reply('❌ Not enough money.');
+  const amount = interaction.options.getInteger('amount');
 
-  removeBalance(id, amount);
+  if (amount <= 0 || amount > user.balance) {
+    return interaction.reply('❌ Invalid bet amount.');
+  }
+
+  user.balance -= amount;
+  updateUser(id, user);
 
   const hand1 = [draw(), draw()];
-  const hand2 = [draw(), draw()];
   const dealer = [draw(), draw()];
 
-  const canSplit =
-    hand1[0].value === hand1[1].value;
+  const canSplit = hand1[0].value === hand1[1].value;
 
   games.set(id, {
     hands: [hand1],
@@ -105,6 +104,7 @@ export async function execute(interaction) {
 // Buttons
 // ----------------------
 function buttons(showSplit, canSplit) {
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('hit').setLabel('Hit').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('stand').setLabel('Stand').setStyle(ButtonStyle.Danger),
@@ -124,6 +124,7 @@ function buttons(showSplit, canSplit) {
 // Render
 // ----------------------
 function render(id, reveal) {
+
   const g = games.get(id);
 
   const handsText = g.hands.map((h, i) => {
@@ -132,7 +133,7 @@ function render(id, reveal) {
   }).join('\n');
 
   return `
-🃏 **BLACKJACK (SPLIT ENABLED)**
+🃏 **BLACKJACK**
 
 ${handsText}
 
@@ -143,21 +144,22 @@ ${handsText}
 }
 
 // ----------------------
-// Handler
+// Button Handler
 // ----------------------
 export async function handleBlackjackButtons(interaction) {
+
   const g = games.get(interaction.user.id);
   if (!g) return interaction.reply({ content: 'No game.', ephemeral: true });
 
   const hand = g.hands[g.activeHand];
 
-  const currentScore = () => score(hand);
+  const scoreHand = () => score(hand);
 
-  // ---------------- HIT ----------------
   if (interaction.customId === 'hit') {
+
     hand.push(draw());
 
-    if (currentScore() > 21) {
+    if (scoreHand() > 21) {
       g.activeHand++;
 
       if (g.activeHand >= g.hands.length) {
@@ -176,8 +178,8 @@ export async function handleBlackjackButtons(interaction) {
     });
   }
 
-  // ---------------- STAND ----------------
   if (interaction.customId === 'stand') {
+
     g.activeHand++;
 
     if (g.activeHand >= g.hands.length) {
@@ -190,18 +192,20 @@ export async function handleBlackjackButtons(interaction) {
     });
   }
 
-  // ---------------- DOUBLE ----------------
   if (interaction.customId === 'double') {
-    const bal = getBalance(interaction.user.id);
-    if (bal < g.amount) {
+
+    const user = getUser(interaction.user.id);
+
+    if (user.balance < g.amount) {
       return interaction.reply({ content: 'Not enough money.', ephemeral: true });
     }
 
-    removeBalance(interaction.user.id, g.amount);
+    user.balance -= g.amount;
+    updateUser(interaction.user.id, user);
+
     g.amount *= 2;
 
     hand.push(draw());
-
     g.activeHand++;
 
     if (g.activeHand >= g.hands.length) {
@@ -214,8 +218,8 @@ export async function handleBlackjackButtons(interaction) {
     });
   }
 
-  // ---------------- SPLIT ----------------
   if (interaction.customId === 'split') {
+
     if (!g.canSplit || g.split) {
       return interaction.reply({ content: 'Cannot split.', ephemeral: true });
     }
@@ -238,10 +242,12 @@ export async function handleBlackjackButtons(interaction) {
 }
 
 // ----------------------
-// Resolve
+// Resolve game
 // ----------------------
 function resolve(interaction) {
+
   const g = games.get(interaction.user.id);
+  const user = getUser(interaction.user.id);
 
   while (score(g.dealer) < 17) {
     g.dealer.push(draw());
@@ -249,39 +255,29 @@ function resolve(interaction) {
 
   const dealerScore = score(g.dealer);
 
-  let totalWin = 0;
+  let win = 0;
 
   for (const hand of g.hands) {
+
     const s = score(hand);
 
     if (s > 21) continue;
 
     if (s > dealerScore || dealerScore > 21) {
-      const isBJ = hand.length === 2 && s === 21;
-
-      totalWin += isBJ
-        ? Math.floor(g.amount * 2.5)
-        : g.amount * 2;
+      win += g.amount * 2;
     } else if (s === dealerScore) {
-      totalWin += g.amount;
+      win += g.amount;
     }
   }
 
-  if (totalWin > 0) {
-    addBalance(interaction.user.id, totalWin);
-  }
-
-  const result =
-    totalWin > g.amount
-      ? `🎉 You won $${totalWin}`
-      : totalWin === g.amount
-        ? `🤝 Push`
-        : `💀 You lost`;
+  user.balance += win;
+  updateUser(interaction.user.id, user);
 
   games.delete(interaction.user.id);
 
   return interaction.update({
-    content: render(interaction.user.id, true) + `\n\n${result}`,
+    content: render(interaction.user.id, true) +
+      `\n\n${win > g.amount ? '🎉 WIN' : win === g.amount ? '🤝 PUSH' : '💀 LOSS'}`,
     components: []
   });
 }
