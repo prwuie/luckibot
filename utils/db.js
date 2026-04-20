@@ -43,3 +43,45 @@ export function getUserDirect(id) {
   const db = load();
   return db[id];
 }
+import fs from 'fs';
+
+const file = './data/users.json';
+
+function load() {
+  if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
+  return JSON.parse(fs.readFileSync(file));
+}
+
+function save(data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+export function getUser(id) {
+  const db = load();
+
+  if (!db[id]) {
+    db[id] = {
+      balance: 1000,
+      lastDaily: 0,
+      streak: 0,
+      lastWork: 0,
+      inventory: {},
+      vault: 0,
+      debt: 0
+    };
+    save(db);
+  }
+
+  return db[id];
+}
+
+export function updateUser(id, data) {
+  const db = load();
+  db[id] = data;
+  save(db);
+}
+
+// ✅ THIS IS WHAT YOU WERE MISSING
+export function getAllUsers() {
+  return load();
+}
