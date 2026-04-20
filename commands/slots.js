@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getBalance, addBalance, removeBalance } from '../utils/economy.js';
+import { getUser, updateUser } from '../utils/db.js';
 
-// 🎰 Weighted symbols (balanced + fun odds)
+// 🎰 Symbols
 const symbols = [
   { emoji: '🍒', weight: 35, multiplier: 2 },
   { emoji: '🍋', weight: 28, multiplier: 2 },
@@ -10,7 +10,6 @@ const symbols = [
   { emoji: '💎', weight: 3, multiplier: 8 }
 ];
 
-// 🧠 weighted spin function
 function spin() {
   const total = symbols.reduce((sum, s) => sum + s.weight, 0);
   let rand = Math.random() * total;
@@ -31,35 +30,32 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
-  const amount = interaction.options.getInteger('amount');
+
   const id = interaction.user.id;
+  const user = getUser(id);
 
-  const bal = getBalance(id);
+  const amount = interaction.options.getInteger('amount');
 
-  // ❌ invalid bet
-  if (amount <= 0 || amount > bal) {
-    return interaction.reply({
-      content: '❌ Invalid bet amount.',
-      ephemeral: false
-    });
+  if (amount <= 0 || amount > user.balance) {
+    return interaction.reply('❌ Invalid bet amount.');
   }
 
-  // 🎰 spin reels
+  user.balance -= amount;
+
   const r1 = spin();
   const r2 = spin();
   const r3 = spin();
 
   const roll = [r1.emoji, r2.emoji, r3.emoji];
-  const result = roll.join(' | ');
 
   let multiplier = 0;
 
-  // 💎 jackpot (3 match)
+  // 💎 jackpot
   if (r1.emoji === r2.emoji && r2.emoji === r3.emoji) {
     multiplier = r1.multiplier;
   }
 
-  // ✨ partial win (2 match)
+  // ✨ 2 match
   else if (
     r1.emoji === r2.emoji ||
     r2.emoji === r3.emoji ||
@@ -68,45 +64,30 @@ export async function execute(interaction) {
     multiplier = 1.2;
   }
 
-  // 🔥 near-win bonus
-  else if (
-    r1.emoji === r2.emoji ||
-    r2.emoji === r3.emoji
-  ) {
-    multiplier = 1.1;
-  }
-
-  // 🌟 SUPER RARE EVENT (VERY LOW CHANCE)
-  const superEvent = Math.random() < 0.002; 
-  // 0.2% chance (VERY rare)
+  // 🌟 rare event
+  const superEvent = Math.random() < 0.002;
 
   if (superEvent) {
     multiplier = multiplier > 0 ? multiplier * 10 : 10;
   }
 
-  // 💰 calculate payout
-  const change = multiplier > 0
+  const winAmount = multiplier > 0
     ? Math.floor(amount * multiplier)
-    : -amount;
+    : 0;
 
-  if (change > 0) {
-    addBalance(id, change);
-  } else {
-    removeBalance(id, Math.abs(change));
-  }
+  user.balance += winAmount;
 
-  // 🎉 response message
-  let message =
-    `🎰 **SLOTS** 🎰\n` +
-    `\`${result}\`\n\n`;
+  updateUser(id, user);
 
-  if (superEvent) {
-    message += `🌟 **SUPER LUCKY EVENT!** 🌟\n`;
-  }
+  let msg =
+`🎰 **SLOTS**
+\`${roll.join(' | ')}\`\n\n`;
 
-  message += change > 0
-    ? `🔥 You won **$${change}**`
-    : `💀 You lost **$${Math.abs(change)}**`;
+  if (superEvent) msg += `🌟 SUPER LUCKY EVENT!\n`;
 
-  return interaction.reply(message);
+  msg += winAmount > 0
+    ? `🔥 You won $${winAmount}`
+    : `💀 You lost $${amount}`;
+
+  return interaction.reply(msg);
 }
