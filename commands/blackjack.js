@@ -1,4 +1,10 @@
-import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} from 'discord.js';
+
 import { getUser, updateUser } from '../utils/db.js';
 
 // =======================
@@ -46,7 +52,7 @@ function score(hand) {
 const games = new Map();
 
 // =======================
-// 📌 SLASH COMMAND EXPORT
+// 📌 COMMAND
 // =======================
 export const data = new SlashCommandBuilder()
   .setName('blackjack')
@@ -63,9 +69,9 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
 
   const id = interaction.user.id;
-  const user = getUser(id);
-
   const amount = interaction.options.getInteger('amount');
+
+  const user = getUser(id);
 
   if (amount <= 0 || amount > user.balance) {
     return interaction.reply({
@@ -77,109 +83,135 @@ export async function execute(interaction) {
   user.balance -= amount;
   updateUser(id, user);
 
-  const hand = [draw(), draw()];
+  const player = [draw(), draw()];
   const dealer = [draw(), draw()];
 
   games.set(id, {
-    hands: [hand],
+    player,
     dealer,
-    amount,
-    activeHand: 0
+    bet: amount
   });
 
   return interaction.reply({
     content: render(id, false),
-    components: buttons()
+    components: getButtons()
   });
 }
 
 // =======================
 // 🎮 BUTTONS
 // =======================
-function buttons() {
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('hit').setLabel('Hit').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('stand').setLabel('Stand').setStyle(ButtonStyle.Danger)
-  );
-
-  return [row];
+function getButtons() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('bj_hit')
+        .setLabel('Hit')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('bj_stand')
+        .setLabel('Stand')
+        .setStyle(ButtonStyle.Danger)
+    )
+  ];
 }
 
 // =======================
-// 🧾 RENDER GAME
+// 🧾 RENDER
 // =======================
 function render(id, reveal) {
   const g = games.get(id);
 
-  const handText = g.hands[0].map(c => c.name).join(' ');
-  const dealerText = reveal
-    ? g.dealer.map(c => c.name).join(' ')
-    : g.dealer[0].name + ' ❓';
+  if (!g) return 'Game expired.';
 
-  return `🃏 **BLACKJACK**\n\nHand: ${handText} (${score(g.hands[0])})\n\nDealer: ${dealerText}\n\n💰 Bet: $${g.amount}`;
+  const player = g.player.map(c => c.name).join(' ');
+  const dealer = reveal
+    ? g.dealer.map(c => c.name).join(' ')
+    : `${g.dealer[0].name} ❓`;
+
+  return `🃏 **BLACKJACK**
+
+Your Hand: ${player} (${score(g.player)})
+
+Dealer: ${dealer}
+
+💰 Bet: $${g.bet}`;
 }
 
 // =======================
-// 🧠 BUTTON HANDLER (IMPORTANT EXPORT)
+// 🧠 BUTTON HANDLER
 // =======================
 export async function handleBlackjackButtons(interaction) {
 
-  const g = games.get(interaction.user.id);
+  const id = interaction.user.id;
+  const g = games.get(id);
+
   if (!g) {
-    return interaction.reply({ content: 'No game found.', flags: 64 });
+    return interaction.reply({
+      content: '❌ No active game.',
+      flags: 64
+    });
   }
 
-  const hand = g.hands[0];
+  // ===================
+  // HIT
+  // ===================
+  if (interaction.customId === 'bj_hit') {
 
-  if (interaction.customId === 'hit') {
-    hand.push(draw());
+    g.player.push(draw());
 
-    if (score(hand) > 21) {
-      games.delete(interaction.user.id);
+    if (score(g.player) > 21) {
+
+      const final = render(id, true); // render BEFORE delete
+      games.delete(id);
 
       return interaction.update({
-        content: render(interaction.user.id, true) + '\n\n💀 BUST!',
+        content: final + '\n\n💀 BUST! You lost.',
         components: []
       });
     }
 
     return interaction.update({
-      content: render(interaction.user.id, false),
-      components: buttons()
+      content: render(id, false),
+      components: getButtons()
     });
   }
 
-  if (interaction.customId === 'stand') {
+  // ===================
+  // STAND (FIXED)
+  // ===================
+  if (interaction.customId === 'bj_stand') {
 
-    let dealerScore = score(g.dealer);
-
-    while (dealerScore < 17) {
+    while (score(g.dealer) < 17) {
       g.dealer.push(draw());
-      dealerScore = score(g.dealer);
     }
 
-    const playerScore = score(hand);
+    const playerScore = score(g.player);
+    const dealerScore = score(g.dealer);
 
     let win = 0;
 
-    if (playerScore > 21) {
-      win = 0;
-    } else if (playerScore > dealerScore || dealerScore > 21) {
-      win = g.amount * 2;
+    if (dealerScore > 21 || playerScore > dealerScore) {
+      win = g.bet * 2;
     } else if (playerScore === dealerScore) {
-      win = g.amount;
+      win = g.bet;
     }
 
-    const user = getUser(interaction.user.id);
+    const user = getUser(id);
     user.balance += win;
-    updateUser(interaction.user.id, user);
+    updateUser(id, user);
 
-    games.delete(interaction.user.id);
+    const final = render(id, true); // ✅ render BEFORE delete
+
+    let result =
+      win > g.bet ? `🎉 WIN +$${win}` :
+      win === g.bet ? `🤝 PUSH +$${win}` :
+      `💀 LOSS -$${g.bet}`;
+
+    games.delete(id); // ✅ delete AFTER render
 
     return interaction.update({
-      content:
-        render(interaction.user.id, true) +
-        `\n\n${win > g.amount ? `🎉 WIN +$${win}` : win === g.amount ? `🤝 PUSH +$${win}` : `💀 LOSS -$${g.amount}`}`,
+      content: final + `\n\n${result}`,
       components: []
     });
   }
