@@ -7,7 +7,7 @@ export const data = new SlashCommandBuilder()
   .setDescription('Buy shop items')
   .addStringOption(opt =>
     opt.setName('item')
-      .setDescription('vault or gun')
+      .setDescription('Buy items from the shop')
       .setRequired(true)
   );
 
@@ -18,31 +18,50 @@ export async function execute(interaction) {
   const item = shopItems.find(i => i.id === itemId);
 
   if (!item) {
-    return interaction.reply('❌ Item not found.');
+    return interaction.reply({ content: '❌ Item not found.', flags: 64 });
   }
 
   if (user.balance < item.price) {
-    return interaction.reply('❌ Not enough money.');
+    return interaction.reply({ content: '❌ Not enough money.', flags: 64 });
   }
+
+  // 🛡️ ensure inventory exists
+  if (!user.inventory) user.inventory = [];
 
   user.balance -= item.price;
 
   // -------------------------
-  // GUN PURCHASE
+  // GUN
   // -------------------------
   if (itemId === 'gun') {
     user.inventory.push('gun');
-    user.gun = false; // must be activated via /use
+    user.gun = false;
   }
 
   // -------------------------
-  // VAULT PURCHASE
+  // VAULT
   // -------------------------
   if (itemId === 'vault') {
     user.vaultUnlocked = true;
   }
 
+  // -------------------------
+  // 🎯 BOUNTY TOKEN
+  // -------------------------
+  if (itemId === 'bounty_token') {
+    user.inventory.push('bounty_token');
+  }
+
+  // -------------------------
+  // 🎟️ LOTTERY TICKET
+  // -------------------------
+  if (itemId === 'lottery_ticket') {
+    user.inventory.push('lottery_ticket');
+  }
+
   updateUser(interaction.user.id, user);
 
-  return interaction.reply(`✅ Purchased **${item.name}**`);
+  return interaction.reply({
+    content: `🛒 Purchased **${item.name}** for $${item.price}`
+  });
 }

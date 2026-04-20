@@ -13,17 +13,17 @@ export const shopItems = [
     description: 'Single-use protection against steal attempts'
   },
 
-  // NEW ITEMS
-  {
-    id: 'bounty_token',
-    name: 'Bounty Token',
-    price: 8000,
-    description: 'Place a bounty on a user. Splits steal rewards 50/50 between you and thief'
-  },
-  {
-    id: 'lottery_ticket',
-    name: 'Lottery Ticket',
-    price: 1500,
-    description: 'Risk-based ticket: small chance to win big, most lose'
-  }
-];
+    // NEW ITEMS
+    {
+      id: 'bounty_token',
+      name: 'Bounty Token',
+      price: 8000,
+      description: 'Place a bounty on a user. Splits steal rewards 50/50 between you and thief'
+    },
+    {
+      id: 'lottery_ticket',
+      name: 'Lottery Ticket',
+      price: 1500,
+      description: 'Small chance to win big'
+    }
+  ];
