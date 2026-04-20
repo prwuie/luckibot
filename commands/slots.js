@@ -10,7 +10,6 @@ const symbols = [
   { emoji: '💎', weight: 3, multiplier: 8 }
 ];
 
-// 🧠 safe weighted spin
 function spin() {
   const total = symbols.reduce((sum, s) => sum + s.weight, 0);
   let rand = Math.random() * total;
@@ -20,7 +19,7 @@ function spin() {
     rand -= s.weight;
   }
 
-  return symbols[0]; // safety fallback
+  return symbols[0];
 }
 
 export const data = new SlashCommandBuilder()
@@ -37,14 +36,11 @@ export async function execute(interaction) {
     const id = interaction.user.id;
     const amount = interaction.options.getInteger('amount');
 
-    const user = getUser(id);
+    // ✅ FIXED: await + safe fallback
+    const user = (await getUser(id)) ?? { balance: 1000 };
 
-    // 🛡️ safety defaults
-    if (!user.balance || typeof user.balance !== 'number') {
-      user.balance = 1000;
-    }
+    if (typeof user.balance !== 'number') user.balance = 1000;
 
-    // ❌ invalid bet
     if (amount <= 0 || amount > user.balance) {
       return interaction.reply({
         content: '❌ Invalid bet amount.',
@@ -52,10 +48,8 @@ export async function execute(interaction) {
       });
     }
 
-    // 💸 place bet
     user.balance -= amount;
 
-    // 🎰 spin reels
     const r1 = spin();
     const r2 = spin();
     const r3 = spin();
@@ -64,13 +58,9 @@ export async function execute(interaction) {
 
     let multiplier = 0;
 
-    // 💎 jackpot
     if (r1.emoji === r2.emoji && r2.emoji === r3.emoji) {
       multiplier = r1.multiplier;
-    }
-
-    // ✨ 2 match
-    else if (
+    } else if (
       r1.emoji === r2.emoji ||
       r2.emoji === r3.emoji ||
       r1.emoji === r3.emoji
@@ -78,39 +68,34 @@ export async function execute(interaction) {
       multiplier = 1.2;
     }
 
-    // 🌟 super rare event
     const superEvent = Math.random() < 0.002;
     if (superEvent) {
       multiplier = multiplier > 0 ? multiplier * 10 : 10;
     }
 
-    // 💰 payout
     const winAmount = multiplier > 0
       ? Math.floor(amount * multiplier)
       : 0;
 
     user.balance += winAmount;
 
-    // 🛡️ final safety clamp
-    if (user.balance < 0 || isNaN(user.balance)) {
+    if (isNaN(user.balance) || user.balance < 0) {
       user.balance = 0;
     }
 
-    updateUser(id, user);
+    await updateUser(id, user);
 
     let msg =
 `🎰 **SLOTS**
 \`${roll.join(' | ')}\`\n\n`;
 
-    if (superEvent) {
-      msg += `🌟 SUPER LUCKY EVENT!\n`;
-    }
+    if (superEvent) msg += `🌟 SUPER LUCKY EVENT!\n`;
 
     msg += winAmount > 0
       ? `🔥 You won $${winAmount}`
       : `💀 You lost $${amount}`;
 
-    return interaction.reply(msg);
+    return interaction.reply({ content: msg });
 
   } catch (err) {
     console.error("SLOTS ERROR:", err);

@@ -7,9 +7,9 @@ import {
 
 import { getUser, updateUser } from '../utils/db.js';
 
-// ----------------------
-// Cards
-// ----------------------
+// =======================
+// CARDS
+// =======================
 const suits = ['♠️', '♥️', '♦️', '♣️'];
 
 const cards = [
@@ -46,14 +46,14 @@ function score(hand) {
   return total;
 }
 
-// ----------------------
-// Games
-// ----------------------
+// =======================
+// GAME STATE
+// =======================
 const games = new Map();
 
-// ----------------------
-// Command
-// ----------------------
+// =======================
+// COMMAND
+// =======================
 export const data = new SlashCommandBuilder()
   .setName('blackjack')
   .setDescription('Play blackjack')
@@ -63,22 +63,27 @@ export const data = new SlashCommandBuilder()
       .setRequired(true)
   );
 
-// ----------------------
-// Start game
-// ----------------------
+// =======================
+// START GAME
+// =======================
 export async function execute(interaction) {
-
   const id = interaction.user.id;
-  const user = getUser(id);
-
   const amount = interaction.options.getInteger('amount');
 
+  let user = await getUser(id);
+  if (!user) user = { balance: 1000 };
+
+  if (typeof user.balance !== 'number') user.balance = 1000;
+
   if (amount <= 0 || amount > user.balance) {
-    return interaction.reply('❌ Invalid bet amount.');
+    return interaction.reply({
+      content: '❌ Invalid bet amount.',
+      flags: 64
+    });
   }
 
   user.balance -= amount;
-  updateUser(id, user);
+  await updateUser(id, user);
 
   const hand1 = [draw(), draw()];
   const dealer = [draw(), draw()];
@@ -96,22 +101,21 @@ export async function execute(interaction) {
 
   return interaction.reply({
     content: render(id, false),
-    components: buttons(true, canSplit)
+    components: buttons(canSplit)
   });
 }
 
-// ----------------------
-// Buttons
-// ----------------------
-function buttons(showSplit, canSplit) {
-
+// =======================
+// BUTTONS
+// =======================
+function buttons(canSplit) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('hit').setLabel('Hit').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('stand').setLabel('Stand').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId('double').setLabel('Double').setStyle(ButtonStyle.Success)
   );
 
-  if (showSplit && canSplit) {
+  if (canSplit) {
     row.addComponents(
       new ButtonBuilder().setCustomId('split').setLabel('Split').setStyle(ButtonStyle.Secondary)
     );
@@ -120,11 +124,10 @@ function buttons(showSplit, canSplit) {
   return [row];
 }
 
-// ----------------------
-// Render
-// ----------------------
+// =======================
+// RENDER
+// =======================
 function render(id, reveal) {
-
   const g = games.get(id);
 
   const handsText = g.hands.map((h, i) => {
@@ -137,29 +140,59 @@ function render(id, reveal) {
 
 ${handsText}
 
-🤖 Dealer: ${reveal ? g.dealer.map(c => c.name).join(' ') : g.dealer[0].name + ' ❓'}
+🤖 Dealer: ${reveal
+    ? g.dealer.map(c => c.name).join(' ')
+    : g.dealer[0].name + ' ❓'}
 
 💰 Bet: $${g.amount}
 `;
 }
 
-// ----------------------
-// Button Handler
-// ----------------------
+// =======================
+// BUTTON HANDLER
+// =======================
 export async function handleBlackjackButtons(interaction) {
+  try {
 
-  const g = games.get(interaction.user.id);
-  if (!g) return interaction.reply({ content: 'No game.', ephemeral: true });
+    const g = games.get(interaction.user.id);
 
-  const hand = g.hands[g.activeHand];
+    if (!g) {
+      return interaction.reply({
+        content: '❌ Game expired.',
+        flags: 64
+      });
+    }
 
-  const scoreHand = () => score(hand);
+    const hand = g.hands[g.activeHand];
+    const getScore = () => score(hand);
 
-  if (interaction.customId === 'hit') {
+    // HIT
+    if (interaction.customId === 'hit') {
 
-    hand.push(draw());
+      hand.push(draw());
 
-    if (scoreHand() > 21) {
+      if (getScore() > 21) {
+        g.activeHand++;
+
+        if (g.activeHand >= g.hands.length) {
+          return resolve(interaction);
+        }
+
+        return interaction.update({
+          content: render(interaction.user.id, false),
+          components: buttons(g.canSplit)
+        });
+      }
+
+      return interaction.update({
+        content: render(interaction.user.id, false),
+        components: buttons(g.canSplit)
+      });
+    }
+
+    // STAND
+    if (interaction.customId === 'stand') {
+
       g.activeHand++;
 
       if (g.activeHand >= g.hands.length) {
@@ -168,116 +201,137 @@ export async function handleBlackjackButtons(interaction) {
 
       return interaction.update({
         content: render(interaction.user.id, false),
-        components: buttons(false, false)
+        components: buttons(g.canSplit)
       });
     }
 
-    return interaction.update({
-      content: render(interaction.user.id, false),
-      components: buttons(false, false)
-    });
-  }
+    // DOUBLE
+    if (interaction.customId === 'double') {
 
-  if (interaction.customId === 'stand') {
+      let user = await getUser(interaction.user.id);
+      if (!user) user = { balance: 1000 };
 
-    g.activeHand++;
+      if (user.balance < g.amount) {
+        return interaction.reply({
+          content: '❌ Not enough money.',
+          flags: 64
+        });
+      }
 
-    if (g.activeHand >= g.hands.length) {
-      return resolve(interaction);
+      user.balance -= g.amount;
+      await updateUser(interaction.user.id, user);
+
+      g.amount *= 2;
+
+      hand.push(draw());
+      g.activeHand++;
+
+      if (g.activeHand >= g.hands.length) {
+        return resolve(interaction);
+      }
+
+      return interaction.update({
+        content: render(interaction.user.id, false),
+        components: buttons(g.canSplit)
+      });
     }
 
-    return interaction.update({
-      content: render(interaction.user.id, false),
-      components: buttons(false, false)
-    });
-  }
+    // SPLIT
+    if (interaction.customId === 'split') {
 
-  if (interaction.customId === 'double') {
+      if (!g.canSplit || g.split) {
+        return interaction.reply({
+          content: '❌ Cannot split.',
+          flags: 64
+        });
+      }
 
-    const user = getUser(interaction.user.id);
+      const [a, b] = g.hands[0];
 
-    if (user.balance < g.amount) {
-      return interaction.reply({ content: 'Not enough money.', ephemeral: true });
+      g.hands = [
+        [a, draw()],
+        [b, draw()]
+      ];
+
+      g.split = true;
+      g.activeHand = 0;
+
+      return interaction.update({
+        content: render(interaction.user.id, false),
+        components: buttons(false)
+      });
     }
 
-    user.balance -= g.amount;
-    updateUser(interaction.user.id, user);
+  } catch (err) {
+    console.error('BLACKJACK BUTTON ERROR:', err);
 
-    g.amount *= 2;
-
-    hand.push(draw());
-    g.activeHand++;
-
-    if (g.activeHand >= g.hands.length) {
-      return resolve(interaction);
+    if (!interaction.replied && !interaction.deferred) {
+      return interaction.reply({
+        content: '❌ Blackjack crashed.',
+        flags: 64
+      });
     }
-
-    return interaction.update({
-      content: render(interaction.user.id, false),
-      components: buttons(false, false)
-    });
-  }
-
-  if (interaction.customId === 'split') {
-
-    if (!g.canSplit || g.split) {
-      return interaction.reply({ content: 'Cannot split.', ephemeral: true });
-    }
-
-    const [a, b] = g.hands[0];
-
-    g.hands = [
-      [a, draw()],
-      [b, draw()]
-    ];
-
-    g.split = true;
-    g.activeHand = 0;
-
-    return interaction.update({
-      content: render(interaction.user.id, false),
-      components: buttons(false, false)
-    });
   }
 }
 
-// ----------------------
-// Resolve game
-// ----------------------
-function resolve(interaction) {
+// =======================
+// RESOLVE (FIXED CRASH VERSION)
+// =======================
+async function resolve(interaction) {
+  try {
 
-  const g = games.get(interaction.user.id);
-  const user = getUser(interaction.user.id);
+    const g = games.get(interaction.user.id);
 
-  while (score(g.dealer) < 17) {
-    g.dealer.push(draw());
-  }
+    if (!g) {
+      return interaction.reply({
+        content: '❌ Game expired.',
+        flags: 64
+      });
+    }
 
-  const dealerScore = score(g.dealer);
+    let user = await getUser(interaction.user.id);
+    if (!user) user = { balance: 1000 };
 
-  let win = 0;
+    while (score(g.dealer) < 17) {
+      g.dealer.push(draw());
+    }
 
-  for (const hand of g.hands) {
+    const dealerScore = score(g.dealer);
 
-    const s = score(hand);
+    let win = 0;
 
-    if (s > 21) continue;
+    for (const hand of g.hands) {
+      const s = score(hand);
 
-    if (s > dealerScore || dealerScore > 21) {
-      win += g.amount * 2;
-    } else if (s === dealerScore) {
-      win += g.amount;
+      if (s > 21) continue;
+
+      if (s > dealerScore || dealerScore > 21) {
+        win += g.amount * 2;
+      } else if (s === dealerScore) {
+        win += g.amount;
+      }
+    }
+
+    user.balance += win;
+    await updateUser(interaction.user.id, user);
+
+    games.delete(interaction.user.id);
+
+    return interaction.update({
+      content:
+        render(interaction.user.id, true) +
+        `\n\n${win > g.amount ? '🎉 WIN' : win === g.amount ? '🤝 PUSH' : '💀 LOSS'}`,
+      components: []
+    });
+
+  } catch (err) {
+    console.error('RESOLVE ERROR:', err);
+
+    if (!interaction.replied && !interaction.deferred) {
+      return interaction.reply({
+        content: '❌ Game crashed.',
+        flags: 64
+      });
     }
   }
-
-  user.balance += win;
-  updateUser(interaction.user.id, user);
-
-  games.delete(interaction.user.id);
-
-  return interaction.update({
-    content: render(interaction.user.id, true) +
-      `\n\n${win > g.amount ? '🎉 WIN' : win === g.amount ? '🤝 PUSH' : '💀 LOSS'}`,
-    components: []
-  });
 }

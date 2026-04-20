@@ -1,5 +1,15 @@
 {
   "981730167397421086": {
-    "balance": 1402
+    "balance": 1422,
+    "vault": 0,
+    "lastDaily": 0,
+    "streak": 0,
+    "lastWork": 0,
+    "lastSteal": 0,
+    "inventory": [],
+    "gun": false,
+    "vaultUnlocked": false,
+    "bountyOn": null,
+    "debt": 0
   }
 }

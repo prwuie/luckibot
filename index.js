@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import * as blackjack from './commands/blackjack.js';
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ for (const file of files) {
   const commandModule = await import(`./commands/${file}`);
   const command = commandModule.default ?? commandModule;
 
-  if (!command?.data?.name || !command?.execute) {
+  if (!command?.data || !command?.execute) {
     console.log(`❌ Invalid command file: ${file}`);
     continue;
   }
@@ -28,33 +29,39 @@ for (const file of files) {
 }
 
 // ===============================
-// READY EVENT
+// READY
 // ===============================
 client.once('ready', () => {
-  console.log(`🎰 Lucki is online as ${client.user.tag}`);
+  console.log(`🎰 Bot online as ${client.user.tag}`);
   console.log(`📊 Commands loaded: ${client.commands.size}`);
 });
 
 // ===============================
-// INTERACTION HANDLER
+// INTERACTIONS
 // ===============================
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🃏 BUTTON HANDLER (BLACKJACK)
+  // 🃏 BLACKJACK BUTTONS
   // ===============================
   if (interaction.isButton()) {
-    try {
-      const blackjack = await import('./commands/blackjack.js');
-      return blackjack.handleBlackjackButtons(interaction);
-    } catch (err) {
-      console.error('Blackjack button error:', err);
+    const valid = ['hit', 'stand', 'double', 'split'];
 
-      return interaction.reply({
-        content: '❌ Error handling blackjack button.',
-        ephemeral: true
-      });
+    if (valid.includes(interaction.customId)) {
+      try {
+        return await blackjack.handleBlackjackButtons(interaction);
+      } catch (err) {
+        console.error('Blackjack error:', err);
+
+        if (!interaction.replied && !interaction.deferred) {
+          return interaction.reply({
+            content: '❌ Blackjack error occurred.',
+            ephemeral: true
+          });
+        }
+      }
     }
+    return;
   }
 
   // ===============================
@@ -62,13 +69,9 @@ client.on('interactionCreate', async interaction => {
   // ===============================
   if (!interaction.isChatInputCommand()) return;
 
-  console.log('➡️ Command:', interaction.commandName);
-
   const command = client.commands.get(interaction.commandName);
 
   if (!command) {
-    console.log('❌ Command not found:', interaction.commandName);
-
     return interaction.reply({
       content: '❌ Command not found.',
       ephemeral: true
@@ -77,22 +80,21 @@ client.on('interactionCreate', async interaction => {
 
   try {
     await command.execute(interaction);
-    console.log('✅ Executed:', interaction.commandName);
+    console.log(`✅ Executed ${interaction.commandName}`);
 
   } catch (error) {
     console.error('❌ Command error:', error);
 
-    try {
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply('❌ An error occurred.');
-      } else {
-        await interaction.reply({
-          content: '❌ An error occurred.',
-          ephemeral: true
-        });
-      }
-    } catch (e) {
-      console.error('❌ Failed to send error message:', e);
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({
+        content: '❌ Error occurred.',
+        ephemeral: true
+      });
+    } else {
+      await interaction.reply({
+        content: '❌ Error occurred.',
+        ephemeral: true
+      });
     }
   }
 });
