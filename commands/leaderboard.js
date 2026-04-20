@@ -21,7 +21,7 @@ export async function execute(interaction) {
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i];
 
-    const user = await interaction.client.users.fetch(entry.id).catch(() => null);
+    const user =await interaction.client.users.fetch(entry.id).catch(() => null);
 
     const name = user ? user.username : 'Unknown User';
 

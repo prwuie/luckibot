@@ -8,7 +8,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
 
   const id = interaction.user.id;
-  const user = await getUser(id);
+  const user = getUser(id);
 
   const now = Date.now();
   const cooldown = 300000; // 5 minutes
@@ -68,7 +68,7 @@ export async function execute(interaction) {
 
   if (user.balance < 0) user.balance = 0;
 
-  await updateUser(user);
+  updateUser(user);
 
   // -------------------------
   // RESPONSE
