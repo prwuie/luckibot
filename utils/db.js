@@ -1,50 +1,107 @@
-import fs from 'fs';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 
-const file = './data/users.json';
+const dbPromise = open({
+  filename: './data/economy.db',
+  driver: sqlite3.Database
+});
 
-function load() {
-  if (!fs.existsSync(file)) fs.writeFileSync(file, '{}');
-  return JSON.parse(fs.readFileSync(file));
-}
+// create table
+(async () => {
+  const db = await dbPromise;
 
-function save(data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      balance INTEGER,
+      vault INTEGER,
+      lastDaily INTEGER,
+      streak INTEGER,
+      lastWork INTEGER,
+      lastSteal INTEGER,
+      inventory TEXT,
+      gun INTEGER,
+      vaultUnlocked INTEGER,
+      bountyOn TEXT,
+      debt INTEGER
+    )
+  `);
+})();
 
-export function getUser(id) {
-  const db = load();
+export async function getUser(id) {
+  const db = await dbPromise;
 
-  if (!db[id]) {
-    db[id] = {
+  let user = await db.get(`SELECT * FROM users WHERE id = ?`, id);
+
+  if (!user) {
+    user = {
+      id,
       balance: 1000,
       vault: 0,
       lastDaily: 0,
       streak: 0,
       lastWork: 0,
       lastSteal: 0,
-      inventory: [],
-      gun: false,
-      vaultUnlocked: false,
+      inventory: JSON.stringify([]),
+      gun: 0,
+      vaultUnlocked: 0,
       bountyOn: null,
       debt: 0
     };
-    save(db);
+
+    await db.run(
+      `INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      user.id,
+      user.balance,
+      user.vault,
+      user.lastDaily,
+      user.streak,
+      user.lastWork,
+      user.lastSteal,
+      user.inventory,
+      user.gun,
+      user.vaultUnlocked,
+      user.bountyOn,
+      user.debt
+    );
   }
 
-  return db[id];
+  return user;
 }
 
-export function updateUser(id, data) {
-  const db = load();
-  db[id] = data;
-  save(db);
+export async function updateUser(user) {
+  const db = await dbPromise;
+
+  await db.run(
+    `UPDATE users SET
+      balance=?,
+      vault=?,
+      lastDaily=?,
+      streak=?,
+      lastWork=?,
+      lastSteal=?,
+      inventory=?,
+      gun=?,
+      vaultUnlocked=?,
+      bountyOn=?,
+      debt=?
+     WHERE id=?`,
+    user.balance,
+    user.vault,
+    user.lastDaily,
+    user.streak,
+    user.lastWork,
+    user.lastSteal,
+    user.inventory,
+    user.gun,
+    user.vaultUnlocked,
+    user.bountyOn,
+    user.debt,
+    user.id
+  );
 }
 
-export function getUserDirect(id) {
-  const db = load();
-  return db[id];
-}
-
-export function getAllUsers() {
-  return load();
+export async function getAllUsers() {
+  const db = await dbPromise;
+  return await db.all(`SELECT * FROM users`);
 }

@@ -6,8 +6,9 @@ export const data = new SlashCommandBuilder()
   .setDescription('Earn money');
 
 export async function execute(interaction) {
+
   const id = interaction.user.id;
-  const user = getUser(id);
+  const user = await getUser(id);
 
   const now = Date.now();
   const cooldown = 300000; // 5 minutes
@@ -23,7 +24,7 @@ export async function execute(interaction) {
   }
 
   // -------------------------
-  // JOBS (expanded + more variety)
+  // JOBS
   // -------------------------
   const jobs = [
     { text: 'You worked at McDonalds 🍔', pay: 120, weight: 18 },
@@ -35,7 +36,7 @@ export async function execute(interaction) {
     { text: 'You flipped burgers at a diner 🍳', pay: 140, weight: 10 },
     { text: 'You did yard work 🌱', pay: 160, weight: 8 },
 
-    // FAIL / NEGATIVE OUTCOMES
+    // FAIL / NEGATIVE
     { text: 'You got scammed on Fiverr 💀', pay: -150, weight: 6 },
     { text: 'You got fired immediately 😂', pay: -200, weight: 4 },
     { text: 'You broke company equipment 🧨', pay: -250, weight: 3 },
@@ -43,7 +44,7 @@ export async function execute(interaction) {
   ];
 
   // -------------------------
-  // WEIGHTED RANDOM PICK
+  // WEIGHTED PICK
   // -------------------------
   const totalWeight = jobs.reduce((a, b) => a + b.weight, 0);
   let roll = Math.random() * totalWeight;
@@ -67,7 +68,7 @@ export async function execute(interaction) {
 
   if (user.balance < 0) user.balance = 0;
 
-  updateUser(id, user);
+  await updateUser(user);
 
   // -------------------------
   // RESPONSE

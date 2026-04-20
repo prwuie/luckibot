@@ -3,7 +3,7 @@ import fs from 'fs';
 const DB_PATH = './data/economy.json';
 
 // -----------------------------
-// 📦 Load database safely
+// 📦 Load DB
 // -----------------------------
 function loadDB() {
   if (!fs.existsSync('./data')) {
@@ -18,21 +18,24 @@ function loadDB() {
 }
 
 // -----------------------------
-// 💾 Save database
+// 💾 Save DB
 // -----------------------------
 function saveDB(db) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
 // -----------------------------
-// 👤 Get user data
+// 👤 Get user
 // -----------------------------
 export function getUser(userId) {
   const db = loadDB();
 
   if (!db[userId]) {
     db[userId] = {
-      balance: 1000 // starting money
+      balance: 1000,
+      lastWork: 0,
+      lastSteal: 0,
+      inventory: []
     };
     saveDB(db);
   }
@@ -41,54 +44,17 @@ export function getUser(userId) {
 }
 
 // -----------------------------
-// 💰 Get balance only
+// 💰 Update user
 // -----------------------------
-export function getBalance(userId) {
-  return getUser(userId).balance;
+export function updateUser(userId, userData) {
+  const db = loadDB();
+  db[userId] = userData;
+  saveDB(db);
 }
 
 // -----------------------------
-// ➕ Add money
+// 📊 Get all users (leaderboard)
 // -----------------------------
-export function addBalance(userId, amount) {
-  const db = loadDB();
-
-  if (!db[userId]) {
-    db[userId] = { balance: 1000 };
-  }
-
-  db[userId].balance += amount;
-  saveDB(db);
-
-  return db[userId].balance;
-}
-
-// -----------------------------
-// ➖ Remove money
-// -----------------------------
-export function removeBalance(userId, amount) {
-  const db = loadDB();
-
-  if (!db[userId]) {
-    db[userId] = { balance: 1000 };
-  }
-
-  db[userId].balance -= amount;
-
-  if (db[userId].balance < 0) {
-    db[userId].balance = 0;
-  }
-
-  saveDB(db);
-
-  return db[userId].balance;
-}
-
-// -----------------------------
-// ✏️ Update full user object
-// -----------------------------
-export function updateUser(userId, newData) {
-  const db = loadDB();
-  db[userId] = newData;
-  saveDB(db);
+export function getAllUsers() {
+  return loadDB();
 }
