@@ -28,7 +28,7 @@ export async function execute(interaction) {
   const target = getUser(targetUserObj.id);
 
   // =========================
-  // 🧠 COOLDOWN FIX (ONLY ADDITION)
+  // 🧠 COOLDOWN SYSTEM
   // =========================
   if (!thief.lastSteal) {
     thief.lastSteal = 0;
@@ -45,7 +45,13 @@ export async function execute(interaction) {
     });
   }
 
-  if (target.balance <= 0) {
+  // =========================
+  // ❌ NO MONEY = NO STEAL
+  // =========================
+  if (!target.balance || target.balance <= 0) {
+    thief.lastSteal = now;
+    updateUser(thiefId, thief);
+
     return interaction.reply({
       content: '❌ This user has no money to steal.',
       flags: 64
@@ -53,7 +59,7 @@ export async function execute(interaction) {
   }
 
   // =========================
-  // 🎯 ORIGINAL SCALING (RESTORED)
+  // 🎯 ORIGINAL SCALING (UNCHANGED)
   // =========================
   let successChance = 0.35;
 
@@ -79,12 +85,12 @@ export async function execute(interaction) {
 
     return interaction.reply(
 `💀 You failed to steal.
-📊 Success chance was ${(successChance * 100).toFixed(1)}%`
+📊 Success chance: ${(successChance * 100).toFixed(1)}%`
     );
   }
 
   // =========================
-  // 🎯 BOUNTY SYSTEM
+  // 🎯 BOUNTY SYSTEM (UNCHANGED)
   // =========================
   let thiefGain = amount;
 
@@ -108,7 +114,7 @@ export async function execute(interaction) {
   thief.balance += thiefGain;
 
   // =========================
-  // ⏳ SAVE COOLDOWN (ONLY ADDITION)
+  // ⏳ SAVE COOLDOWN
   // =========================
   thief.lastSteal = now;
 
