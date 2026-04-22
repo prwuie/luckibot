@@ -10,14 +10,13 @@ import { getUser, updateUser } from '../utils/db.js';
 const games = new Map();
 
 const TIMEOUT = 30000;
-const WARNING_TIME = 10000;
 
 // =========================
 // COMMAND
 // =========================
 export const data = new SlashCommandBuilder()
   .setName('flip')
-  .setDescription('Phase-based coin prediction game')
+  .setDescription('Coin prediction gambling game')
   .addIntegerOption(opt =>
     opt.setName('amount')
       .setDescription('Bet amount')
@@ -61,23 +60,23 @@ Bet: $${amount}`
     );
   }
 
-  const now = Date.now();
-
   const game = {
     amount,
-    choice,
+    choice: null,          // 👈 no locked prediction
     streak: 1,
     multiplier: 1.5,
-    phase: 'choose',
-    lastResult: result,
-    lastActive: now
+    awaitingChoice: true,
+    lastActive: Date.now()
   };
 
   games.set(id, game);
 
   return interaction.reply({
-    content: render(game, result),
-    components: buttons()
+    content:
+`🔥 WIN!
+
+🧠 Choose your next prediction:`,
+    components: choiceButtons()
   });
 }
 
@@ -96,41 +95,17 @@ export function handleFlipButtons(interaction) {
   const now = Date.now();
 
   // =========================
-  // 💀 HARD TIMEOUT (30s)
+  // TIMEOUT
   // =========================
   if (now - game.lastActive > TIMEOUT) {
     games.delete(id);
 
     return interaction.update({
-      content:
-`⏱️ Game expired (30s timeout)
-💀 You lost your streak.`,
+      content: '⏱️ Game expired (30s timeout).',
       components: []
     });
   }
 
-  // =========================
-  // ⚠️ WARNING (10s LEFT)
-  // =========================
-  const timeLeft = TIMEOUT - (now - game.lastActive);
-
-  if (timeLeft <= WARNING_TIME) {
-    game.lastActive = now;
-
-    return interaction.update({
-      content:
-`⚠️ HURRY UP!
-
-⏱️ ${Math.ceil(timeLeft / 1000)}s left
-🔥 Streak: ${game.streak}
-💰 Multiplier: x${game.multiplier.toFixed(2)}`,
-      components: buttons()
-    });
-  }
-
-  // =========================
-  // RESET TIMER ON ACTION
-  // =========================
   game.lastActive = now;
 
   // =========================
@@ -139,7 +114,6 @@ export function handleFlipButtons(interaction) {
   if (interaction.customId === 'cashout') {
 
     const user = getUser(id);
-
     const winnings = Math.floor(game.amount * game.multiplier);
 
     user.balance += winnings;
@@ -157,57 +131,52 @@ export function handleFlipButtons(interaction) {
   }
 
   // =========================
-  // CONTINUE SYSTEM (PHASE)
+  // CONTINUE → ASK CHOICE
   // =========================
   if (interaction.customId === 'continue') {
 
-    // PHASE 1: resolve flip
-    if (game.phase === 'choose') {
+    return interaction.update({
+      content:
+`🧠 Choose your prediction:`,
+      components: choiceButtons()
+    });
+  }
 
-      const result = flip();
-      const win = result === game.choice;
+  // =========================
+  // HEADS / TAILS CHOICE
+  // =========================
+  if (interaction.customId === 'heads' || interaction.customId === 'tails') {
 
-      if (!win) {
-        games.delete(id);
+    const choice = interaction.customId;
+    const result = flip();
 
-        return interaction.update({
-          content:
+    if (result !== choice) {
+
+      games.delete(id);
+
+      return interaction.update({
+        content:
 `💀 YOU LOST!
+You chose: ${choice}
 Coin: ${result}
 🔥 Final Streak: ${game.streak}`,
-          components: []
-        });
-      }
-
-      game.streak++;
-      game.multiplier *= 1.6;
-      game.lastResult = result;
-
-      game.phase = 'pick';
-
-      return interaction.update({
-        content:
-`🔥 WIN! Coin: ${result}
-
-🧠 Click Continue to change prediction`,
-        components: buttons()
+        components: []
       });
     }
 
-    // PHASE 2: change prediction
-    if (game.phase === 'pick') {
+    game.streak++;
+    game.multiplier *= 1.6;
 
-      game.choice = game.choice === 'heads' ? 'tails' : 'heads';
-      game.phase = 'choose';
+    return interaction.update({
+      content:
+`🔥 WIN!
 
-      return interaction.update({
-        content:
-`🧠 New prediction: **${game.choice}**
+Coin: ${result}
+🔥 Streak: ${game.streak}
+💰 Multiplier: x${game.multiplier.toFixed(2)}`,
 
-Press Continue to flip again.`,
-        components: buttons()
-      });
-    }
+      components: buttons()
+    });
   }
 }
 
@@ -219,7 +188,7 @@ function buttons() {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('continue')
-        .setLabel('Continue / Choose')
+        .setLabel('Continue')
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
@@ -230,31 +199,31 @@ function buttons() {
   ];
 }
 
-// =========================
-// RENDER
-// =========================
-function render(game, result) {
-  return `
-🪙 **COIN FLIP PHASE GAME**
+function choiceButtons() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('heads')
+        .setLabel('Heads')
+        .setStyle(ButtonStyle.Primary),
 
-🔥 Result: ${result}
-🎯 Current Guess: ${game.choice}
-🔥 Streak: ${game.streak}
-💰 Multiplier: x${game.multiplier.toFixed(2)}
-
-⚡ You can change prediction after each win
-`;
+      new ButtonBuilder()
+        .setCustomId('tails')
+        .setLabel('Tails')
+        .setStyle(ButtonStyle.Primary)
+    )
+  ];
 }
 
 // =========================
-// COIN FLIP
+// COIN
 // =========================
 function flip() {
   return Math.random() < 0.5 ? 'heads' : 'tails';
 }
 
 // =========================
-// EXPORT FIX
+// EXPORT
 // =========================
 export default {
   data,

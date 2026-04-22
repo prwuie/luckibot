@@ -5,13 +5,17 @@ import fs from 'fs';
 dotenv.config();
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 client.commands = new Collection();
 
 // ===============================
-// 🧠 SAFE REPLY HELPER
+// SAFE REPLY HELPER
 // ===============================
 async function safeReply(interaction, payload) {
   try {
@@ -25,25 +29,32 @@ async function safeReply(interaction, payload) {
 }
 
 // ===============================
-// 📦 COMMAND LOADER (FIXED PROPERLY)
+// COMMAND LOADER
 // ===============================
 const files = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 
 for (const file of files) {
   try {
-    const command = await import(`./commands/${file}`);
+    const commandModule = await import(`./commands/${file}`);
 
-    const data = command.data;
+    const command = commandModule.default ?? commandModule;
 
-    const name = data?.name ?? data?.toJSON?.()?.name;
+    const data = command.data ?? command;
 
-    // ❌ HARD VALIDATION (REAL FIX)
-    if (!data || !command.execute) {
+    if (!data) {
+      console.log(`❌ Invalid command file: ${file}`);
+      continue;
+    }
+
+    const name = data.name ?? data.toJSON?.()?.name;
+
+    if (!name || !command.execute) {
       console.log(`❌ Missing data/execute in: ${file}`);
       continue;
     }
 
     client.commands.set(name, command);
+
     console.log(`✅ Loaded command: ${name}`);
 
   } catch (err) {
@@ -52,9 +63,9 @@ for (const file of files) {
 }
 
 // ===============================
-// READY EVENT (FIXED NAME)
+// READY EVENT
 // ===============================
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`🎰 Bot online as ${client.user.tag}`);
   console.log(`📊 Commands loaded: ${client.commands.size}`);
 });
@@ -65,51 +76,40 @@ client.once('ready', () => {
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🔘 BUTTON ROUTER
+  // BUTTON HANDLERS (FLIP + BLACKJACK)
   // ===============================
   if (interaction.isButton()) {
+
     try {
 
-      // import once per handler call (safe + simple)
-      const blackjack = await import('./commands/blackjack.js');
-      const flip = await import('./commands/flip.js');
+      const flipModule = await import('./commands/flip.js');
+      const blackjackModule = await import('./commands/blackjack.js');
 
-      const blackjackHandler = blackjack.handleBlackjackButtons;
-      const flipHandler = flip.handleFlipButtons;
+      const flipHandler = flipModule.handleFlipButtons;
+      const blackjackHandler = blackjackModule.handleBlackjackButtons;
 
-      // 🃏 BLACKJACK BUTTONS
+      const id = interaction.customId;
+
+      // 🎰 FLIP SYSTEM
       if (
-        ['hit', 'stand', 'double', 'split'].includes(interaction.customId)
+        id === 'continue' ||
+        id === 'cashout' ||
+        id === 'heads' ||
+        id === 'tails'
       ) {
-        if (typeof blackjackHandler === 'function') {
-          return blackjackHandler(interaction);
-        }
-
-        return safeReply(interaction, {
-          content: '❌ Blackjack system error.',
-          flags: 64
-        });
+        return flipHandler(interaction);
       }
 
-      // 🪙 FLIP BUTTONS
-      if (
-        ['continue', 'cashout'].includes(interaction.customId)
-      ) {
-        if (typeof flipHandler === 'function') {
-          return flipHandler(interaction);
-        }
-
-        return safeReply(interaction, {
-          content: '❌ Flip system error.',
-          flags: 64
-        });
+      // 🃏 BLACKJACK SYSTEM
+      if (typeof blackjackHandler === 'function') {
+        return blackjackHandler(interaction);
       }
 
     } catch (err) {
-      console.error('Button error:', err);
+      console.error('Button handler error:', err);
 
       return safeReply(interaction, {
-        content: '❌ Button handling error.',
+        content: '❌ Button system error.',
         flags: 64
       });
     }
