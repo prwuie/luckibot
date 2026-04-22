@@ -18,8 +18,6 @@ export async function execute(interaction) {
         value:
 `/balance → Check your money
 /work → Earn money (5 min cooldown)
-/deposit <amount> → Store money in vault (if owned)
-/withdraw <amount> → Take money from vault
 `,
       },
 
@@ -29,20 +27,7 @@ export async function execute(interaction) {
         value:
 `/slots <amount> → Play slots
 /blackjack <amount> → Play blackjack
-/flip <amount> <heads/tails> → High-risk streak coin flip (NEW)
-`,
-      },
-
-      // 🪙 FLIP GAME INFO
-      {
-        name: '🪙 Flip System (NEW)',
-        value:
-`• Build streaks for higher multipliers
-• Continue = risk streak
-• Cashout = secure winnings
-• Lose once = lose entire streak
-• 30s timeout = automatic loss
-• Rare lucky boosts available 🍀
+/flip <amount> <choice> → High-risk coin streak game
 `,
       },
 
@@ -50,34 +35,24 @@ export async function execute(interaction) {
       {
         name: '🥷 Crime',
         value:
-`/steal <user> → Attempt to steal money (wallet only)
-/bounty <user> → Place bounty on a user (item-based)
+`/steal <user> → Attempt to steal money (30 min cooldown)
 `,
       },
 
-      // 🛒 SHOP
+      // 🛒 SHOP (UPDATED)
       {
-        name: '🛒 Shop / Items',
+        name: '🛒 Shop',
         value:
-`/shop → View items
-/buy <item> → Buy item
-/use <item> → Use items
-
-🎒 Items:
-• Gun → protection / crime utility
-• Vault → store money safely
-• Bounty Token → place bounty
-• Lottery Ticket → gamble item
+`/shop → Open shop menu (dropdown UI)
+/use <item> → Use item
 `,
       },
 
-      // 🏦 VAULT SYSTEM
+      // 🎯 SPECIAL
       {
-        name: '🏦 Vault System',
+        name: '🎯 Special',
         value:
-`• Vault protects money from /steal
-• Requires Vault item to use
-• View balance with /balance
+`/bounty <user> → Place bounty on a user
 `,
       },
 
@@ -87,7 +62,6 @@ export async function execute(interaction) {
         value:
 `/addmoney <user> <amount>
 /removemoney <user> <amount>
-/setmoney <user> <amount>
 `,
       }
     )

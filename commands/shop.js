@@ -1,16 +1,42 @@
-import { SlashCommandBuilder } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  EmbedBuilder
+} from 'discord.js';
+
 import { shopItems } from '../data/shop.js';
 
 export const data = new SlashCommandBuilder()
   .setName('shop')
-  .setDescription('View casino shop');
+  .setDescription('Open the shop');
 
 export async function execute(interaction) {
-  let msg = '🛒 **CASINO SHOP**\n\n';
 
-  for (const item of shopItems) {
-    msg += `🎰 **${item.name}**\n💰 $${item.price}\n📝 ${item.description}\n\n`;
-  }
+  const embed = new EmbedBuilder()
+    .setTitle('🛒 Shop')
+    .setColor(0x00AE86)
+    .setDescription(
+      shopItems.map(i =>
+        `🛍️ **${i.name}** - $${i.price}\n${i.description}`
+      ).join('\n\n')
+    );
 
-  return interaction.reply(msg);
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('shop_select')
+    .setPlaceholder('Select an item to buy')
+    .addOptions(
+      shopItems.slice(0, 25).map(item => ({
+        label: item.name,
+        description: `$${item.price}`,
+        value: item.id
+      }))
+    );
+
+  const row = new ActionRowBuilder().addComponents(menu);
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [row]
+  });
 }

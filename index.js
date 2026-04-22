@@ -6,16 +6,14 @@ dotenv.config();
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.Guilds
   ]
 });
 
 client.commands = new Collection();
 
 // ===============================
-// SAFE REPLY HELPER
+// SAFE REPLY
 // ===============================
 async function safeReply(interaction, payload) {
   try {
@@ -38,7 +36,6 @@ for (const file of files) {
     const commandModule = await import(`./commands/${file}`);
 
     const command = commandModule.default ?? commandModule;
-
     const data = command.data ?? command;
 
     if (!data) {
@@ -54,7 +51,6 @@ for (const file of files) {
     }
 
     client.commands.set(name, command);
-
     console.log(`✅ Loaded command: ${name}`);
 
   } catch (err) {
@@ -63,7 +59,7 @@ for (const file of files) {
 }
 
 // ===============================
-// READY EVENT
+// READY
 // ===============================
 client.once('clientReady', () => {
   console.log(`🎰 Bot online as ${client.user.tag}`);
@@ -76,7 +72,53 @@ client.once('clientReady', () => {
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // BUTTON HANDLERS (FLIP + BLACKJACK)
+  // 🛒 SHOP DROPDOWN HANDLER
+  // ===============================
+  if (interaction.isStringSelectMenu()) {
+
+    if (interaction.customId === 'shop_select') {
+
+      try {
+        const itemId = interaction.values[0];
+
+        const { shopItems } = await import('./data/shop.js');
+        const { getUser, updateUser } = await import('./utils/db.js');
+
+        const item = shopItems.find(i => i.id === itemId);
+        const user = getUser(interaction.user.id);
+
+        if (!item) {
+          return interaction.reply({ content: '❌ Item not found.', flags: 64 });
+        }
+
+        if (user.balance < item.price) {
+          return interaction.reply({ content: '❌ Not enough money.', flags: 64 });
+        }
+
+        user.balance -= item.price;
+
+        if (!user.inventory) user.inventory = [];
+
+        if (itemId === 'gun') user.inventory.push('gun');
+        if (itemId === 'bounty_token') user.inventory.push('bounty_token');
+        if (itemId === 'lottery_ticket') user.inventory.push('lottery_ticket');
+        if (itemId === 'vault') user.vaultUnlocked = true;
+
+        updateUser(interaction.user.id, user);
+
+        return interaction.reply({
+          content: `🛒 Purchased **${item.name}** for $${item.price}`,
+          flags: 64
+        });
+
+      } catch (err) {
+        console.error('Shop error:', err);
+      }
+    }
+  }
+
+  // ===============================
+  // 🔘 BUTTON HANDLERS (FLIP + BLACKJACK)
   // ===============================
   if (interaction.isButton()) {
 
@@ -106,7 +148,7 @@ client.on('interactionCreate', async interaction => {
       }
 
     } catch (err) {
-      console.error('Button handler error:', err);
+      console.error('Button error:', err);
 
       return safeReply(interaction, {
         content: '❌ Button system error.',
