@@ -2,14 +2,27 @@ import { SlashCommandBuilder } from 'discord.js';
 import { getUser, updateUser } from '../utils/db.js';
 import { shopItems } from '../data/shop.js';
 
+// 🔥 build dropdown choices dynamically
+const choices = shopItems.map(item => ({
+  name: `${item.name} ($${item.price})`,
+  value: item.id
+}));
+
 export const data = new SlashCommandBuilder()
   .setName('buy')
   .setDescription('Buy shop items')
-  .addStringOption(opt =>
+  .addStringOption(opt => {
     opt.setName('item')
-      .setDescription('Buy items from the shop')
-      .setRequired(true)
-  );
+      .setDescription('Select an item to buy')
+      .setRequired(true);
+
+    // 👇 add all shop items to dropdown
+    for (const choice of choices) {
+      opt.addChoices(choice);
+    }
+
+    return opt;
+  });
 
 export async function execute(interaction) {
   const user = getUser(interaction.user.id);
@@ -25,7 +38,6 @@ export async function execute(interaction) {
     return interaction.reply({ content: '❌ Not enough money.', flags: 64 });
   }
 
-  // 🛡️ ensure inventory exists
   if (!user.inventory) user.inventory = [];
 
   user.balance -= item.price;

@@ -26,12 +26,12 @@
     "debt": 0
   },
   "326986216585166848": {
-    "balance": 24003,
+    "balance": 4003,
     "vault": 0,
     "lastDaily": 1776676106940,
     "streak": 1,
     "lastWork": 1776676120776,
-    "lastSteal": 1776676067325,
+    "lastSteal": 1776712887847,
     "inventory": [],
     "gun": false,
     "vaultUnlocked": false,
