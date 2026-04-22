@@ -13,21 +13,27 @@ const client = new Client({
 client.commands = new Collection();
 
 // ===============================
-// SAFE REPLY
+// 🧠 SAFE REPLY (FIXED)
 // ===============================
 async function safeReply(interaction, payload) {
   try {
-    if (interaction.replied || interaction.deferred) {
+    if (interaction.deferred) {
+      return await interaction.editReply(payload);
+    }
+
+    if (interaction.replied) {
       return await interaction.followUp(payload);
     }
+
     return await interaction.reply(payload);
+
   } catch (err) {
     console.error('safeReply error:', err);
   }
 }
 
 // ===============================
-// COMMAND LOADER
+// 📦 COMMAND LOADER
 // ===============================
 const files = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 
@@ -59,7 +65,7 @@ for (const file of files) {
 }
 
 // ===============================
-// READY
+// 🚀 READY
 // ===============================
 client.once('clientReady', () => {
   console.log(`🎰 Bot online as ${client.user.tag}`);
@@ -67,12 +73,29 @@ client.once('clientReady', () => {
 });
 
 // ===============================
-// INTERACTION HANDLER
+// ⚡ INTERACTION HANDLER
 // ===============================
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🛒 SHOP DROPDOWN HANDLER
+  // 🔍 AUTOCOMPLETE (NEW)
+  // ===============================
+  if (interaction.isAutocomplete()) {
+    const command = client.commands.get(interaction.commandName);
+
+    if (command?.autocomplete) {
+      try {
+        await command.autocomplete(interaction);
+      } catch (err) {
+        console.error('Autocomplete error:', err);
+      }
+    }
+
+    return;
+  }
+
+  // ===============================
+  // 🛒 SHOP DROPDOWN
   // ===============================
   if (interaction.isStringSelectMenu()) {
 
@@ -118,7 +141,7 @@ client.on('interactionCreate', async interaction => {
   }
 
   // ===============================
-  // 🔘 BUTTON HANDLERS (FLIP + BLACKJACK)
+  // 🔘 BUTTON HANDLERS
   // ===============================
   if (interaction.isButton()) {
 
@@ -132,7 +155,7 @@ client.on('interactionCreate', async interaction => {
 
       const id = interaction.customId;
 
-      // 🎰 FLIP SYSTEM
+      // 🎰 FLIP
       if (
         id === 'continue' ||
         id === 'cashout' ||
@@ -142,7 +165,7 @@ client.on('interactionCreate', async interaction => {
         return flipHandler(interaction);
       }
 
-      // 🃏 BLACKJACK SYSTEM
+      // 🃏 BLACKJACK
       if (typeof blackjackHandler === 'function') {
         return blackjackHandler(interaction);
       }
@@ -158,7 +181,7 @@ client.on('interactionCreate', async interaction => {
   }
 
   // ===============================
-  // SLASH COMMANDS
+  // 💬 SLASH COMMANDS
   // ===============================
   if (!interaction.isChatInputCommand()) return;
 
@@ -185,6 +208,6 @@ client.on('interactionCreate', async interaction => {
 });
 
 // ===============================
-// LOGIN
+// 🔐 LOGIN
 // ===============================
 client.login(process.env.DISCORD_TOKEN);
