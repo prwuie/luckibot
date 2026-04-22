@@ -101,7 +101,7 @@ export async function handleFlipButtons(interaction) {
   }
 
   // timeout
-  if (Date.now() - game.lastActive > 15000) {
+  if (Date.now() - game.lastActive > 30000) {
     games.delete(id);
 
     return interaction.update({

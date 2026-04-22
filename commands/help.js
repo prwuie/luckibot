@@ -41,7 +41,7 @@ export async function execute(interaction) {
 • Continue = risk streak
 • Cashout = secure winnings
 • Lose once = lose entire streak
-• 15s timeout = automatic loss
+• 30s timeout = automatic loss
 • Rare lucky boosts available 🍀
 `,
       },
@@ -60,7 +60,7 @@ export async function execute(interaction) {
         name: '🛒 Shop / Items',
         value:
 `/shop → View items
-/buy <item> → Buy item (now dropdown)
+/buy <item> → Buy item
 /use <item> → Use items
 
 🎒 Items:
