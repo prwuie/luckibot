@@ -21,23 +21,30 @@ export async function execute(interaction) {
   const leaderboard = Object.entries(users)
     .map(([id, user]) => ({
       id,
-      streak: user.bestFlipStreak || 0
+      streak: user.bestFlipStreak ?? 0   // ✅ FIXED SAFE READ
     }))
+    .filter(u => u.streak > 0) // optional: hides empty users
     .sort((a, b) => b.streak - a.streak)
     .slice(0, 10);
+
+  if (leaderboard.length === 0) {
+    return interaction.reply({
+      content: 'No flip streaks recorded yet 🎲',
+      flags: 64
+    });
+  }
 
   const desc = leaderboard.map((u, i) => {
     const emoji = getEmoji(i);
 
-    return (
-`${emoji} <@${u.id}> — **${u.streak}**`
-    );
+    return `${emoji} <@${u.id}> — **${u.streak}**`;
   }).join('\n');
 
   const embed = new EmbedBuilder()
     .setTitle('🪙 Flip Leaderboard')
     .setColor(0xFFD700)
-    .setDescription(desc || 'No data yet');
+    .setDescription(desc)
+    .setFooter({ text: 'Keep flipping to climb the ranks 🎲' });
 
   return interaction.reply({ embeds: [embed] });
 }

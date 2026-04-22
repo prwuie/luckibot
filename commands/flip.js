@@ -52,6 +52,7 @@ export async function execute(interaction) {
 
   const result = flip();
 
+  // ❌ instant loss
   if (result !== choice) {
     return interaction.reply(
 `💀 YOU LOST!
@@ -62,7 +63,7 @@ Bet: $${amount}`
 
   const game = {
     amount,
-    choice: null,          // 👈 no locked prediction
+    choice: null,
     streak: 1,
     multiplier: 1.5,
     awaitingChoice: true,
@@ -109,7 +110,7 @@ export function handleFlipButtons(interaction) {
   game.lastActive = now;
 
   // =========================
-  // CASHOUT
+  // CASHOUT (ALWAYS AVAILABLE)
   // =========================
   if (interaction.customId === 'cashout') {
 
@@ -117,6 +118,12 @@ export function handleFlipButtons(interaction) {
     const winnings = Math.floor(game.amount * game.multiplier);
 
     user.balance += winnings;
+
+    // ✅ SAVE BEST STREAK (FIX)
+    if (!user.bestFlipStreak || game.streak > user.bestFlipStreak) {
+      user.bestFlipStreak = game.streak;
+    }
+
     updateUser(id, user);
 
     games.delete(id);
@@ -166,6 +173,16 @@ Coin: ${result}
 
     game.streak++;
     game.multiplier *= 1.6;
+    game.lastActive = now;
+
+    // ✅ SAVE BEST STREAK (FIX)
+    const user = getUser(id);
+
+    if (!user.bestFlipStreak || game.streak > user.bestFlipStreak) {
+      user.bestFlipStreak = game.streak;
+    }
+
+    updateUser(id, user);
 
     return interaction.update({
       content:
@@ -173,8 +190,9 @@ Coin: ${result}
 
 Coin: ${result}
 🔥 Streak: ${game.streak}
-💰 Multiplier: x${game.multiplier.toFixed(2)}`,
+💰 Multiplier: x${game.multiplier.toFixed(2)}
 
+👉 You can cash out anytime or continue.`,
       components: buttons()
     });
   }
@@ -216,7 +234,7 @@ function choiceButtons() {
 }
 
 // =========================
-// COIN
+// COIN FLIP
 // =========================
 function flip() {
   return Math.random() < 0.5 ? 'heads' : 'tails';
