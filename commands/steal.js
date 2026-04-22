@@ -3,7 +3,7 @@ import { getUser, updateUser } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
   .setName('steal')
-  .setDescription('Try to steal money from a user')
+  .setDescription('Attempt to steal money from someone')
   .addUserOption(opt =>
     opt.setName('user')
       .setDescription('Target user')
@@ -12,108 +12,80 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   const thiefId = interaction.user.id;
-  const targetUser = interaction.options.getUser('user');
+  const targetUserObj = interaction.options.getUser('user');
 
-  if (targetUser.bot || targetUser.id === thiefId) {
-    return interaction.reply('❌ Invalid target.');
+  if (targetUserObj.id === thiefId) {
+    return interaction.reply({
+      content: '❌ You cannot steal from yourself.',
+      flags: 64
+    });
   }
 
   const thief = getUser(thiefId);
-  const victim = getUser(targetUser.id);
+  const target = getUser(targetUserObj.id);
 
-  const now = Date.now();
-  const cooldown = 30 * 60 * 1000;
-
-  if (now - thief.lastSteal < cooldown) {
-    const mins = Math.ceil((cooldown - (now - thief.lastSteal)) / 60000);
-    return interaction.reply(`⏳ Wait ${mins} minute(s).`);
+  if (target.balance <= 0) {
+    return interaction.reply({
+      content: '❌ This user has no money to steal.',
+      flags: 64
+    });
   }
 
-  thief.lastSteal = now;
+  // =========================
+  // 🎯 DYNAMIC SUCCESS RATE
+  // =========================
 
-  if (victim.balance <= 0) {
-    updateUser(thiefId, thief);
-    return interaction.reply('❌ Target has no money.');
-  }
+  // base chance
+  let successChance = 0.35;
 
-  if (Math.random() * 100 > 35) {
-    updateUser(thiefId, thief);
-    return interaction.reply(`💀 ${interaction.user.username} failed to steal from ${targetUser.username}`);
-  }
+  // scale with target wallet (log-based so it doesn't explode)
+  successChance += Math.log10(target.balance + 1) * 0.1;
 
-  const percent = Math.floor(Math.random() * 21) + 5;
-  let stolen = Math.floor(victim.balance * (percent / 100));
+  // clamp between 35% and 85%
+  successChance = Math.min(Math.max(successChance, 0.35), 0.85);
 
-  // -------------------------
-  // GUN SYSTEM
-  // -------------------------
-  if (victim.gun) {
-    const trigger = Math.random() < 0.5;
+  const success = Math.random() < successChance;
 
-    if (trigger) {
-      const percentFromThief = Math.floor(Math.random() * 25) + 10;
-      const counter = Math.floor(Math.abs(thief.balance) * (percentFromThief / 100)) + 200;
+  // =========================
+  // 💸 STEAL AMOUNT
+  // =========================
+  const maxSteal = Math.floor(target.balance * 0.4);
+  const amount = Math.max(1, Math.floor(Math.random() * maxSteal));
 
-      thief.balance -= counter;
-      victim.balance += counter;
-      victim.gun = false;
-
-      updateUser(thiefId, thief);
-      updateUser(targetUser.id, victim);
-
-      return interaction.reply(
-        `🔫 ${targetUser.username} shoots ${interaction.user.username}!\n` +
-        `💥 ${targetUser.username} steals $${counter} from ${interaction.user.username}`
-      );
-    } else {
-      victim.gun = false;
-
-      victim.balance -= stolen;
-      thief.balance += stolen;
-
-      updateUser(thiefId, thief);
-      updateUser(targetUser.id, victim);
-
-      return interaction.reply(
-        `🔫 ${targetUser.username}'s gun jams!\n` +
-        `🥷 ${interaction.user.username} steals $${stolen} from ${targetUser.username}`
-      );
-    }
-  }
-
-  // -------------------------
-  // BOUNTY SYSTEM
-  // -------------------------
-  if (victim.bountyOn === thiefId) {
-    const split = Math.floor(stolen / 2);
-    const bountyOwner =getUser(victim.bountyOn);
-
-    thief.balance += split;
-    bountyOwner.balance += split;
-
-    victim.balance -= stolen;
-
-    updateUser(thiefId, thief);
-    updateUser(targetUser.id, victim);
-    updateUser(victim.bountyOn, bountyOwner);
-
+  if (!success) {
     return interaction.reply(
-      `🎯 BOUNTY ACTIVE!\n` +
-      `${interaction.user.username} steals $${split} from ${targetUser.username}\n` +
-      `💰 Bounty owner receives $${split}`
+      `💀 You failed to steal.\n📊 Success chance was ${(successChance * 100).toFixed(1)}%`
     );
   }
 
-  // -------------------------
-  // NORMAL STEAL
-  // -------------------------
-  victim.balance -= stolen;
-  thief.balance += stolen;
+  // =========================
+  // 🎯 BOUNTY SYSTEM
+  // =========================
+  let thiefGain = amount;
+
+  if (target.bountyOn) {
+    const bountyOwner = getUser(target.bountyOn);
+
+    const split = Math.floor(amount / 2);
+
+    thiefGain = split;
+    bountyOwner.balance += split;
+
+    updateUser(target.bountyOn, bountyOwner);
+
+    target.bountyOn = null;
+  }
+
+  // =========================
+  // 💰 APPLY CHANGES
+  // =========================
+  target.balance -= amount;
+  thief.balance += thiefGain;
 
   updateUser(thiefId, thief);
-  updateUser(targetUser.id, victim);
+  updateUser(targetUserObj.id, target);
 
   return interaction.reply(
-    `🥷 ${interaction.user.username} steals $${stolen} from ${targetUser.username}`
+    `🕵️ You stole **$${thiefGain}** from **${targetUserObj.username}**!\n📊 Success chance: ${(successChance * 100).toFixed(1)}%`
   );
 }

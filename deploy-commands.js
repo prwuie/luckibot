@@ -7,27 +7,40 @@ dotenv.config();
 const commands = [];
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 
+// =========================
+// LOAD COMMANDS
+// =========================
 for (const file of commandFiles) {
   const commandModule = await import(`./commands/${file}`);
-  const command = commandModule.default ?? commandModule;
+
+  const command = commandModule;
 
   if (command?.data) {
     commands.push(command.data.toJSON());
   }
 }
 
+// =========================
+// REST CLIENT
+// =========================
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
+// =========================
+// DEPLOY
+// =========================
 try {
   console.log('🚀 Deploying commands...');
 
-  await rest.put
-   Routes.applicationGuildCommands(
-  process.env.CLIENT_ID,
-  process.env.GUILD_ID
-);
+  await rest.put(
+    Routes.applicationGuildCommands(
+      process.env.CLIENT_ID,
+      process.env.GUILD_ID
+    ),
+    { body: commands }
+  );
 
   console.log('✅ Commands deployed successfully!');
+
 } catch (error) {
   console.error('❌ Deploy error:', error);
 }

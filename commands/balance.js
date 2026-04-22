@@ -3,9 +3,12 @@ import { getUser } from '../utils/db.js';
 
 export const data = new SlashCommandBuilder()
   .setName('balance')
-  .setDescription('Check your money');
+  .setDescription('Check your balance');
 
 export async function execute(interaction) {
   const user = getUser(interaction.user.id);
-  await interaction.reply(`💰 You have **$${user.balance}**`);
+
+  return interaction.reply({
+    content: `💰 Wallet: $${user.balance}\n🏦 Vault: $${user.vault}`
+  });
 }

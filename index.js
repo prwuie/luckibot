@@ -25,32 +25,25 @@ async function safeReply(interaction, payload) {
 }
 
 // ===============================
-// 📦 COMMAND LOADER (FIXED)
+// 📦 COMMAND LOADER (FIXED PROPERLY)
 // ===============================
 const files = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 
 for (const file of files) {
   try {
-    const commandModule = await import(`./commands/${file}`);
+    const command = await import(`./commands/${file}`);
 
-    const command = commandModule.default ?? commandModule;
+    const data = command.data;
 
-    const data = command.data ?? command;
+    const name = data?.name ?? data?.toJSON?.()?.name;
 
-    if (!data) {
-      console.log(`❌ Invalid command file: ${file}`);
-      continue;
-    }
-
-    const name = data.name ?? data.toJSON?.()?.name;
-
-    if (!name || !command.execute) {
+    // ❌ HARD VALIDATION (REAL FIX)
+    if (!data || !command.execute) {
       console.log(`❌ Missing data/execute in: ${file}`);
       continue;
     }
 
     client.commands.set(name, command);
-
     console.log(`✅ Loaded command: ${name}`);
 
   } catch (err) {
@@ -59,9 +52,9 @@ for (const file of files) {
 }
 
 // ===============================
-// READY EVENT
+// READY EVENT (FIXED NAME)
 // ===============================
-client.once('clientReady', () => {
+client.once('ready', () => {
   console.log(`🎰 Bot online as ${client.user.tag}`);
   console.log(`📊 Commands loaded: ${client.commands.size}`);
 });
@@ -72,23 +65,25 @@ client.once('clientReady', () => {
 client.on('interactionCreate', async interaction => {
 
   // ===============================
-  // 🃏 BLACKJACK BUTTONS FIXED
+  // 🔘 BUTTON ROUTER
   // ===============================
   if (interaction.isButton()) {
     try {
 
-      const blackjackModule = await import('./commands/blackjack.js');
+      // import once per handler call (safe + simple)
+      const blackjack = await import('./commands/blackjack.js');
+      const flip = await import('./commands/flip.js');
 
-      const blackjack =
-        blackjackModule.default ??
-        blackjackModule;
+      const blackjackHandler = blackjack.handleBlackjackButtons;
+      const flipHandler = flip.handleFlipButtons;
 
-      const handler =
-        blackjackModule.handleBlackjackButtons ??
-        blackjack.handleBlackjackButtons;
-
-      if (typeof handler !== 'function') {
-        console.error('❌ Blackjack handler missing');
+      // 🃏 BLACKJACK BUTTONS
+      if (
+        ['hit', 'stand', 'double', 'split'].includes(interaction.customId)
+      ) {
+        if (typeof blackjackHandler === 'function') {
+          return blackjackHandler(interaction);
+        }
 
         return safeReply(interaction, {
           content: '❌ Blackjack system error.',
@@ -96,13 +91,25 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      return handler(interaction);
+      // 🪙 FLIP BUTTONS
+      if (
+        ['continue', 'cashout'].includes(interaction.customId)
+      ) {
+        if (typeof flipHandler === 'function') {
+          return flipHandler(interaction);
+        }
+
+        return safeReply(interaction, {
+          content: '❌ Flip system error.',
+          flags: 64
+        });
+      }
 
     } catch (err) {
-      console.error('Blackjack button error:', err);
+      console.error('Button error:', err);
 
       return safeReply(interaction, {
-        content: '❌ Error handling blackjack button.',
+        content: '❌ Button handling error.',
         flags: 64
       });
     }
