@@ -1,6 +1,8 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getUser, updateUser } from '../utils/db.js';
 
+const COOLDOWN = 30 * 60 * 1000; // 30 minutes
+
 export const data = new SlashCommandBuilder()
   .setName('steal')
   .setDescription('Attempt to steal money from someone')
@@ -11,6 +13,7 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
+
   const thiefId = interaction.user.id;
   const targetUserObj = interaction.options.getUser('user');
 
@@ -24,6 +27,24 @@ export async function execute(interaction) {
   const thief = getUser(thiefId);
   const target = getUser(targetUserObj.id);
 
+  // =========================
+  // 🧠 COOLDOWN FIX (ONLY ADDITION)
+  // =========================
+  if (!thief.lastSteal) {
+    thief.lastSteal = 0;
+  }
+
+  const now = Date.now();
+
+  if (now - thief.lastSteal < COOLDOWN) {
+    const remaining = COOLDOWN - (now - thief.lastSteal);
+
+    return interaction.reply({
+      content: `⏳ You are on cooldown! Try again in **${Math.ceil(remaining / 60000)} minutes**.`,
+      flags: 64
+    });
+  }
+
   if (target.balance <= 0) {
     return interaction.reply({
       content: '❌ This user has no money to steal.',
@@ -32,16 +53,12 @@ export async function execute(interaction) {
   }
 
   // =========================
-  // 🎯 DYNAMIC SUCCESS RATE
+  // 🎯 ORIGINAL SCALING (RESTORED)
   // =========================
-
-  // base chance
   let successChance = 0.35;
 
-  // scale with target wallet (log-based so it doesn't explode)
   successChance += Math.log10(target.balance + 1) * 0.1;
 
-  // clamp between 35% and 85%
   successChance = Math.min(Math.max(successChance, 0.35), 0.85);
 
   const success = Math.random() < successChance;
@@ -52,9 +69,17 @@ export async function execute(interaction) {
   const maxSteal = Math.floor(target.balance * 0.4);
   const amount = Math.max(1, Math.floor(Math.random() * maxSteal));
 
+  // =========================
+  // 💀 FAIL CASE
+  // =========================
   if (!success) {
+
+    thief.lastSteal = now;
+    updateUser(thiefId, thief);
+
     return interaction.reply(
-      `💀 You failed to steal.\n📊 Success chance was ${(successChance * 100).toFixed(1)}%`
+`💀 You failed to steal.
+📊 Success chance was ${(successChance * 100).toFixed(1)}%`
     );
   }
 
@@ -82,10 +107,16 @@ export async function execute(interaction) {
   target.balance -= amount;
   thief.balance += thiefGain;
 
+  // =========================
+  // ⏳ SAVE COOLDOWN (ONLY ADDITION)
+  // =========================
+  thief.lastSteal = now;
+
   updateUser(thiefId, thief);
   updateUser(targetUserObj.id, target);
 
   return interaction.reply(
-    `🕵️ You stole **$${thiefGain}** from **${targetUserObj.username}**!\n📊 Success chance: ${(successChance * 100).toFixed(1)}%`
+`🕵️ You stole **$${thiefGain}** from **${targetUserObj.username}**
+📊 Success chance: ${(successChance * 100).toFixed(1)}%`
   );
 }
